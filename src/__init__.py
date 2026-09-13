@@ -1,0 +1,1 @@
+"""ImHungry application source package."""
