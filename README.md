@@ -8,7 +8,7 @@ This milestone is a minimal AI dietitian built with Python 3.12, Strands Agents,
 uv sync
 ```
 
-Configure AWS credentials with access to Amazon Bedrock and set a region. The model defaults to `global.anthropic.claude-sonnet-4-6`; override it with `STRANDS_MODEL_ID` if needed.
+Configure AWS credentials with access to Amazon Bedrock and set a region. The model defaults to `global.amazon.nova-2-lite-v1:0`; override it with `STRANDS_MODEL_ID` if needed. Model responses are capped at 3,000 tokens by default so Nova has enough room for tool-use turns; override that with `STRANDS_MAX_TOKENS` when needed.
 
 `log_food` intentionally requires calories plus all three macro values. If a user only knows some of them, the agent should ask for the missing values instead of pretending that unknown macros are zero or estimated.
 
