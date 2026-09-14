@@ -169,10 +169,10 @@ SK = NUTRITION_STRATEGY#<effective-from-UTC>
     "desired_rate_kg_per_week": 0.4
   },
   "targets": {
-    "energy_kcal": 2100,
-    "protein_g": 160,
-    "carbs_g": 210,
-    "fat_g": 70,
+    "energy_kcal": 2331,
+    "protein_g": 132,
+    "carbs_g": 275.86,
+    "fat_g": 77.69,
     "hydration_ml": 2500
   },
   "calculation": {
@@ -184,13 +184,15 @@ SK = NUTRITION_STRATEGY#<effective-from-UTC>
       "height_cm": 178,
       "weight_kg": 82.5,
       "activity_level": "moderately_active",
-      "activity_multiplier": 1.55
+      "activity_multiplier": 1.55,
+      "protein_g_per_kg": 1.6,
+      "fat_fraction": 0.3
     },
     "results": {
-      "bmr_kcal": 1780,
-      "tdee_kcal": 2759
+      "bmr_kcal": 1787.5,
+      "tdee_kcal": 2770.62
     },
-    "assumptions": []
+    "assumptions": ["Activity multiplier is self-reported", "7700 kcal/kg is an approximate planning conversion"]
   },
   "change_reason": "initial_setup",
   "notes": null
@@ -329,16 +331,16 @@ SK = RECIPE#<recipe-id>
     }
   ],
   "nutrition_total": {
-    "energy_kcal": 2400,
-    "protein_g": 240,
-    "carbs_g": 180,
-    "fat_g": 80
+    "energy_kcal": 1350,
+    "protein_g": 180,
+    "carbs_g": 0,
+    "fat_g": 72
   },
   "nutrition_per_serving": {
-    "energy_kcal": 400,
-    "protein_g": 40,
-    "carbs_g": 30,
-    "fat_g": 13.33
+    "energy_kcal": 225,
+    "protein_g": 30,
+    "carbs_g": 0,
+    "fat_g": 12
   },
   "calculation_version": 1,
   "updated_at": "<UTC timestamp>",
@@ -634,6 +636,12 @@ cannot safely fence a delayed S3 writer. S3 and DynamoDB commits are not atomic.
 Successful message receipts preserve replay results; tools derive stable retry
 keys from the trusted request and tool invocation identity.
 
+Conversation metadata also stores an internal `has_snapshot` marker to detect
+missing previously committed snapshots. Operational message receipts contain
+completed response text for replay; they are not a second queryable transcript.
+Deleting a conversation removes its snapshot, response/create receipts and
+metadata, while independent user nutrition records remain.
+
 Historical daily targets use local end-of-day, while today's uses the current
 instant. Date ranges are inclusive and limited to 366 days. Existing record dates
 do not move merely because a profile timezone changes. Explicit date corrections
@@ -644,7 +652,7 @@ fixed UTC microsecond precision and duplicate timestamps conflict.
 - Nutrition strategy revisions are append-only. A correction creates a new effective revision.
 - Food, hydration, recipes, planned meals, check-ins, patterns, profiles, and conversation metadata are mutable through conditional version checks.
 - Removing a food or hydration entry uses a conditional delete. Audit history is not retained unless a future requirement calls for soft deletion.
-- Completing a planned meal does not automatically make it historical intake. The service creates explicit intake entries and records their IDs on the planned meal.
+- Completing a planned meal does not automatically make it historical intake. Log consumption explicitly, then link existing intake IDs from the planned meal's local date. The service verifies those IDs belong to the same user.
 - Recipe and saved-food edits never alter historical intake because logged entries contain nutrition snapshots.
 - Structured facts learned in conversation are persisted only through validated tools. The model does not write arbitrary DynamoDB items.
 

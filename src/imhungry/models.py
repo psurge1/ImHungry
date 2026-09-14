@@ -6,15 +6,15 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, AwareDatetime, field_validator, model_validator
 
-Number = Annotated[float, Field(ge=0, allow_inf_nan=False, strict=True)]
-Positive = Annotated[float, Field(gt=0, allow_inf_nan=False, strict=True)]
+Number = Annotated[float, Field(ge=0, le=1e9, allow_inf_nan=False, strict=True)]
+Positive = Annotated[float, Field(gt=0, le=1e9, allow_inf_nan=False, strict=True)]
 Text = Annotated[str, Field(min_length=1, max_length=2000)]
 Rating = Annotated[int, Field(ge=1, le=10, strict=True)]
 Meal = Literal["breakfast", "lunch", "dinner", "snack", "other"]
 
 
 class Model(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, allow_inf_nan=False)
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, allow_inf_nan=False, populate_by_name=True)
 
     def data(self):
         return self.model_dump(mode="json", by_alias=True, exclude_none=True)

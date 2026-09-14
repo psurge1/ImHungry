@@ -122,7 +122,7 @@ class NutritionService:
             raise AppError("validation", "Invalid resource reference") from None
 
     def public(self, item):
-        hidden = {"PK", "SK", "GSI1PK", "GSI1SK", "invocation_id", "invocation_status", "pending_request"}
+        hidden = {"PK", "SK", "GSI1PK", "GSI1SK", "invocation_id", "invocation_status", "pending_request", "has_snapshot"}
         return {k: deepcopy(v) for k, v in item.items() if k not in hidden}
 
     def get(self, user, kind, reference="profile"):
@@ -151,6 +151,15 @@ class NutritionService:
         if kind == "profile":
             key, reference = prefix, "profile"
         elif kind == "nutrition-strategies":
+            if data["calculation"]["method"] == "mifflin_st_jeor":
+                inputs = data["calculation"]["inputs"]
+                request = {"goal": data["goal"], "protein_g_per_kg": inputs.get("protein_g_per_kg", 1.6),
+                           "fat_fraction": inputs.get("fat_fraction", .3)}
+                if "hydration_ml" in data["targets"]:
+                    request["hydration_ml"] = data["targets"]["hydration_ml"]
+                calculated = self.calculate_strategy(user, request)
+                if not calculated["complete"] or calculated["targets"] != data["targets"] or calculated["calculation"] != data["calculation"]:
+                    raise AppError("calculation_changed", "Recalculate the strategy from current profile inputs before saving; manual targets must use user_provided provenance")
             item["effective_from"] = utc(data["effective_from"])
             key, reference = prefix + "#" + item["effective_from"], item["effective_from"]
         else:
@@ -378,9 +387,10 @@ class NutritionService:
         baseline = self.repo.query(user, "NUTRITION_STRATEGY#", lower, reverse=True, limit=1)
         revisions = baseline + self.repo.query(user, lower, upper)
         result = {}
+        today, now = self.today(user), self.clock()
         for offset in range((span.end_date - span.start_date).days + 1):
             day = span.start_date + timedelta(days=offset)
-            instant = self.clock() if day == self.today(user) else datetime.combine(day, time.max, zone)
+            instant = now if day == today else datetime.combine(day, time.max, zone)
             applicable = [revision for revision in revisions if revision["effective_from"] <= utc(instant)]
             result[str(day)] = self.public(applicable[-1]) if applicable else None
         return result

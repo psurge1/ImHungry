@@ -64,10 +64,15 @@ skill lock is preserved without committing it.
 13. Existing dependencies omit FastAPI/server/auth/test support. Add only the
     runtime and local testing libraries needed. No AWS resources, IAM, deployment,
     frontend, MCP, RAG, or additional agent architecture are part of this work.
+14. Numerical examples also needed correction: the strategy's sample BMR/TDEE
+    did not match its inputs, and the recipe's totals did not match its single
+    listed ingredient. Both examples now match deterministic calculation. The
+    Mifflin-St Jeor equation was checked against its original publication.
 
 SDK APIs were inspected in the installed source. References:
 [Strands snapshot manager](https://strandsagents.com/docs/api/python/strands.session.snapshot_session_manager/),
 [Cognito verification](https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-verifying-a-jwt.html).
+[Mifflin-St Jeor equation](https://pubmed.ncbi.nlm.nih.gov/2305711/).
 
 ## Feature coverage matrix
 
@@ -123,3 +128,38 @@ Updated as stages complete. This milestone ends after Stage 4 verification.
   Estimation uses Strands BedrockModel.structured_output directly, without a second
   agent. External database/menu implementations remain unconfigured contracts.
   Period target aggregation uses two bounded timeline queries, not one per day.
+- Integration finding: Strands 1.55.1's tool validator calls model_dump(), so
+  nested Pydantic arguments reach tool functions as dictionaries, including
+  Python field names for aliases. The shared tool adapter reconstructs those
+  validated domain models before invoking services. Direct-call tests alone
+  would not catch this; the real Strands loop test does.
+- Stage 3 committed and pushed as 57793e9; full suite: 59 passed.
+- Stage 4: native S3 snapshot lifecycle, durable message replay and exclusive
+  conversation writes; fail-closed partial failures and missing snapshots;
+  production runtime composition; explicit offline/Bedrock CLI modes. Legacy
+  globally shared mock tools and their seven baseline-only tests were removed.
+  The current suite has 77 passing tests, including every one of the 34 tools
+  through Strands' adapter. Focused final integration group: 23 passed. Offline
+  CLI recommendation and `git diff --check` pass. One upstream Starlette/AnyIO
+  deprecation warning remains; no application warnings or failing tests.
+  The interactive offline CLI also passes greeting -> food logging -> dinner
+  context. All 57 documented HTTP operations are present, and OpenAPI generation
+  succeeds. No live model calls were made.
+
+## Completion boundaries
+
+The four feature groups now have canonical persistence, shared services, tool
+adapters and HTTP contracts, with suggestions/coaching flowing through the single
+conversation agent. No fifth group or plan ID was introduced. S3's frozen native
+schema and key layout are unchanged. Operational response receipts and fail-closed
+conversation coordination are explicitly documented additions to DynamoDB.
+
+Deferred as documented: an external food database and restaurant-menu provider,
+restaurant discovery, the second presentation experience, and live AWS deployment/
+verification. Bedrock structured estimation is implemented and fake-model-tested.
+Tests prove orchestration, not the quality of live model recommendations.
+
+README.md contains local run commands, resource requirements and a partial-failure
+recovery procedure. `skills-lock.json` remains the user's untracked file, unchanged.
+No live AWS calls, resource creation, IAM edits, secrets or .env files were used in
+implementation commits. Stage 4 is the end of this implementation milestone.

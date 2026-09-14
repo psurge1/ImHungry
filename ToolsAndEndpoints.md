@@ -469,6 +469,7 @@ The message endpoint is the only general AI endpoint. Meal recommendations, subs
 | --- | --- | --- |
 | `POST` | `/v1/hydration` | Log one hydration entry. |
 | `GET` | `/v1/hydration` | List hydration entries for a date range. |
+| `GET` | `/v1/hydration/{entry_ref}` | Get one owned hydration entry and its current version. |
 | `PATCH` | `/v1/hydration/{entry_ref}` | Edit one hydration entry. |
 | `DELETE` | `/v1/hydration/{entry_ref}` | Remove one hydration entry. |
 | `GET` | `/v1/hydration-summary` | Return daily or period hydration totals against the applicable target. |

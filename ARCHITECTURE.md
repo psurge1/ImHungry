@@ -139,7 +139,7 @@ All items include `record_type`, `schema_version`, and `created_at`. Mutable ite
 | Behavior pattern | `BEHAVIOR_PATTERN#<pattern-id>` | Confirmed recurring situations and agreed strategies |
 | Conversation metadata | `CONVERSATION#<conversation-id>` | Ownership, title, status, version, timestamps and invocation coordination |
 
-Recipes embed their ingredient list because a recipe is retrieved as one unit and expected recipes are far below DynamoDB's 400 KB item limit. If that assumption stops being true, ingredients can become separate items without changing the public service boundary. Current weight is obtained from the latest check-in; it is not duplicated as an independently editable profile field.
+Recipes embed their ingredient list and enforce a size limit below DynamoDB's item limit. Current weight is obtained from the latest check-in containing a weight measurement; it is not duplicated as an independently editable profile field.
 
 Only conversation metadata initially participates in a secondary index:
 
@@ -162,7 +162,7 @@ Because `GSI1PK` and `GSI1SK` are absent from all other item types, this is a sp
 | Get recent check-ins or latest weight | Query dated check-ins; skip entries without weight when finding latest weight |
 | List conversations by recency | Query `GSI1` in descending order |
 
-Daily summary items are not stored initially because they would duplicate food-log data and create a consistency obligation. The service calculates summaries from the user's date-keyed entries; a derived `DAILY_SUMMARY#<local-date>` cache can be introduced later only if measurements show that repeated aggregation is too expensive. A conditional update on the conversation metadata item acquires a short-lived invocation lock so two requests cannot update the same S3 snapshot concurrently.
+Daily summaries are calculated from date-keyed entries; a cache can be introduced only if measurements justify it. Conditional conversation metadata updates exclude concurrent snapshot writers. Failed or abandoned invocations remain locked pending operator reconciliation, because automatic lease expiry cannot fence a delayed S3 writer. Operational request receipts are described in SCHEMA.md.
 
 ## Per-User Data Isolation
 

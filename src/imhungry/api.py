@@ -7,11 +7,12 @@ from uuid import uuid4
 from fastapi import FastAPI, Body, Depends, Header, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 
 from .auth import deny_authentication
 from .errors import AppError
-from .models import RECORDS, Strategy, StrategyCalculationRequest, Recipe, FoodEstimateRequest
+from .models import RECORDS, Strategy, StrategyCalculationRequest, Recipe, FoodEstimateRequest, Conversation, Model
+from .providers import run_async
 
 
 def create_app(services, *, verifier=deny_authentication, conversations=None):
@@ -151,4 +152,45 @@ def create_app(services, *, verifier=deny_authentication, conversations=None):
 
     for kind in ("food-log", "recipes", "saved-foods", "hydration", "planned-meals", "check-ins", "behavior-patterns"):
         resource_routes(kind)
+
+    def conversation_service():
+        if conversations is None:
+            raise AppError("service_unavailable", "Conversation storage is not configured", 503)
+        return conversations
+
+    class Message(Model):
+        message: Annotated[str, Field(min_length=1, max_length=12000)]
+        client_request_id: Annotated[str, Field(min_length=1, max_length=200)] | None = None
+
+    @app.post("/v1/conversations", status_code=201)
+    def create_conversation(request: Conversation, key=Depends(request_key), user=Depends(identity), conv=Depends(conversation_service)):
+        return conv.create(user, request.data(), key)
+
+    @app.get("/v1/conversations")
+    def list_conversations(limit: int = Query(50, ge=1, le=100), cursor: str | None = None, user=Depends(identity)):
+        return services.list(user, "conversations", limit=limit, cursor=cursor)
+
+    @app.get("/v1/conversations/{conversation_id}")
+    def get_conversation(conversation_id: str, user=Depends(identity), conv=Depends(conversation_service)):
+        return conv.get(user, conversation_id)
+
+    @app.patch("/v1/conversations/{conversation_id}")
+    def patch_conversation(conversation_id: str, patch: dict = Body(), expected=Depends(version), user=Depends(identity), conv=Depends(conversation_service)):
+        return conv.update(user, conversation_id, patch, expected)
+
+    @app.delete("/v1/conversations/{conversation_id}")
+    def delete_conversation(conversation_id: str, expected=Depends(version), user=Depends(identity), conv=Depends(conversation_service)):
+        return run_async(lambda: conv.delete(user, conversation_id, expected))
+
+    @app.get("/v1/conversations/{conversation_id}/messages")
+    def messages(conversation_id: str, user=Depends(identity), conv=Depends(conversation_service)):
+        return run_async(lambda: conv.messages(user, conversation_id))
+
+    @app.post("/v1/conversations/{conversation_id}/messages")
+    def send_message(conversation_id: str, request: Message,
+                           idempotency_key: Annotated[str | None, Header(max_length=200)] = None,
+                           user=Depends(identity), conv=Depends(conversation_service)):
+        if idempotency_key and request.client_request_id and idempotency_key != request.client_request_id:
+            raise AppError("validation", "Header and body request IDs must match")
+        return run_async(lambda: conv.invoke(user, conversation_id, request.message, idempotency_key or request.client_request_id))
     return app

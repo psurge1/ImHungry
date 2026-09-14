@@ -1,8 +1,9 @@
 """Model-facing sibling adapters; trusted invocation state supplies identity."""
 
 from functools import wraps
+import inspect
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from strands import ToolContext, tool
 
 from .errors import AppError
@@ -11,10 +12,17 @@ from .models import (Intake, Strategy, StrategyCalculationRequest, Recipe, Saved
 
 
 def safe_tool(function):
+    signature = inspect.signature(function)
     @wraps(function)
     def safe(*args, **kwargs):
         try:
-            return function(*args, **kwargs)
+            bound = signature.bind(*args, **kwargs)
+            for name, value in bound.arguments.items():
+                annotation = signature.parameters[name].annotation
+                if inspect.isclass(annotation) and issubclass(annotation, BaseModel):
+                    # Strands 1.55.1 validates and model_dump()s nested inputs.
+                    bound.arguments[name] = annotation.model_validate(value)
+            return function(*bound.args, **bound.kwargs)
         except AppError as error:
             return {"error": {"code": error.code, "message": error.message}}
         except (ValidationError, ValueError, TypeError):
@@ -165,17 +173,18 @@ def save_behavior_pattern(tool_context: ToolContext, pattern: BehaviorPattern) -
 
 
 @safe_tool
-def get_recipes(tool_context: ToolContext, query: str | None = None) -> dict:
+def get_recipes(tool_context: ToolContext, query: str | None = None, cursor: str | None = None) -> dict:
     """Read saved recipes, optionally matching a food or recipe name."""
     services, user = context(tool_context)
-    return services.list(user, "recipes", query=query)
+    return services.list(user, "recipes", query=query, cursor=cursor)
 
 
 @safe_tool
-def get_saved_and_frequent_foods(tool_context: ToolContext, query: str | None = None, lookback_days: int = 60) -> dict:
+def get_saved_and_frequent_foods(tool_context: ToolContext, query: str | None = None, lookback_days: int = 60, cursor: str | None = None) -> dict:
     """Read reusable foods and frequency derived from recent actual intake."""
     services, user = context(tool_context)
-    return {"saved_foods": services.list(user, "saved-foods", query=query)["items"], "frequent_foods": services.frequent_foods(user, query, lookback_days)}
+    page = services.list(user, "saved-foods", query=query, cursor=cursor)
+    return {"saved_foods": page["items"], "next_cursor": page["next_cursor"], "frequent_foods": services.frequent_foods(user, query, lookback_days)}
 
 
 @safe_tool

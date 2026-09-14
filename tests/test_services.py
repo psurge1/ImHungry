@@ -48,6 +48,9 @@ def test_profile_calculation_and_dated_summary(service):
     calculated = service.calculate_strategy("alice", GOAL)
     assert calculated["calculation"]["results"] == {"bmr_kcal": 1787.5, "tdee_kcal": 2770.62}
     strategy = {k: calculated[k] for k in ("goal", "targets", "calculation")}
+    with pytest.raises(AppError, match="Recalculate"):
+        service.create("alice", "nutrition-strategies", {**strategy, "targets": {**strategy["targets"], "energy_kcal": 1},
+                       "effective_from": "2026-09-14T05:00:00Z", "change_reason": "forged"}, "forged")
     service.create("alice", "nutrition-strategies", {**strategy, "effective_from": "2026-09-14T05:00:00Z", "change_reason": "setup"}, "strategy")
     with pytest.raises(Conflict):
         service.create("alice", "nutrition-strategies", {**strategy, "effective_from": "2026-09-14T05:00:00Z", "change_reason": "duplicate time"}, "other")
@@ -96,3 +99,12 @@ def test_reject_untrusted_patch_and_bad_reference(service):
         service.update("alice", "profile", "profile", {"user_id": "bob"}, 0)
     with pytest.raises(AppError):
         service.get("alice", "food-log", "../../someone")
+
+
+def test_future_revision_does_not_change_todays_target(service):
+    service.update("alice", "profile", "profile", PROFILE, 0)
+    calculation = service.calculate_strategy("alice", GOAL)
+    strategy = {k: calculation[k] for k in ("goal", "targets", "calculation")}
+    service.create("alice", "nutrition-strategies", {**strategy, "effective_from": "2026-09-14T20:00:00Z", "change_reason": "later"}, "future")
+    assert service.summary("alice", "2026-09-14")["days"][0]["targets"] is None
+    assert service.summary("alice", "2026-09-15")["days"][0]["targets"] == strategy["targets"]

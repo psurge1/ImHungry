@@ -1,27 +1,163 @@
-# ImHungry - Milestone 1
+# ImHungry
 
-This milestone is a minimal AI dietitian built with Python 3.12, Strands Agents, and Amazon Bedrock. The four nutrition tools are local functions, and food entries live only in memory until the process exits.
+Python 3.12 nutrition backend with FastAPI, one Strands dietitian agent, Bedrock,
+DynamoDB product records and native Strands S3 conversation snapshots.
 
-## Setup
+The four feature groups are defined in [FEATURES.md](FEATURES.md). The completed
+audit, feature/service/tool/endpoint/test matrix and staged implementation plan
+are in [IMPLEMENTATION.md](IMPLEMENTATION.md). Persistence and interfaces are
+documented in [SCHEMA.md](SCHEMA.md) and [ToolsAndEndpoints.md](ToolsAndEndpoints.md).
+
+## Run locally without AWS
 
 ```bash
 uv sync
+UV_CACHE_DIR=/tmp/imhungry-uv-cache uv run pytest -q
+uv run imhungry --demo
 ```
 
-Configure AWS credentials with access to Amazon Bedrock and set a region. The model defaults to `global.amazon.nova-2-lite-v1:0`; override it with `STRANDS_MODEL_ID` if needed. Model responses are capped at 3,000 tokens by default so Nova has enough room for tool-use turns; override that with `STRANDS_MAX_TOKENS` when needed.
-
-`log_food` intentionally requires calories plus all three macro values. If a user only knows some of them, the agent should ask for the missing values instead of pretending that unknown macros are zero or estimated.
-
-The project declares the optional botocore CRT support required by AWS login profiles, so `uv sync` installs it automatically.
+The offline demo uses a clearly labeled scripted model, the real Strands tool
+loop, memory repositories and native in-memory snapshots. Try `hello`,
+`log demo yogurt`, then `what should I eat for dinner?`. The demo yogurt has
+explicit fixture values of 150 kcal, 20 g protein, 10 g carbohydrates and 3 g fat;
+these are test data, not a nutrition lookup. Data is discarded when the CLI exits.
 
 ```bash
-export AWS_REGION=us-west-2
-uv run pytest
-uv run imhungry
+uv run imhungry --demo --message "What should I eat for dinner?"
 ```
 
-The CLI keeps one Strands `Agent` instance alive, so a logged meal can inform a later recommendation in the same conversation. For a one-shot request:
+With existing authorized Bedrock access, `uv run imhungry --local` uses the real
+model with ephemeral local data. This CLI is a local development harness with a
+fixed local identity; it cannot access production DynamoDB or S3. There is no
+development identity override in the production HTTP application.
+
+## Run the HTTP backend against existing AWS resources
+
+No infrastructure is provisioned by this repository. Configure these non-secret
+environment settings after the resources and backend execution role exist:
+
+| Setting | Purpose |
+| --- | --- |
+| `IMHUNGRY_TABLE` | Existing DynamoDB table with string PK/SK and sparse GSI1 |
+| `IMHUNGRY_BUCKET` | Existing private S3 snapshot bucket |
+| `IMHUNGRY_ENV` | Storage namespace, default `dev`; lowercase letters/digits/hyphens |
+| `COGNITO_ISSUER` | `https://cognito-idp.<region>.amazonaws.com/<pool-id>` |
+| `COGNITO_CLIENT_ID` | Allowed Cognito app client |
+| `AWS_REGION` | AWS region, default `us-west-2` |
+| `STRANDS_MODEL_ID` | Default `global.amazon.nova-2-lite-v1:0` |
+| `STRANDS_MAX_TOKENS` | Per-model-call output cap, default 3000 |
 
 ```bash
-uv run imhungry --message "What should I eat for dinner?"
+uv run uvicorn imhungry.runtime:app_factory --factory --host 127.0.0.1 --port 8000
 ```
+
+Startup fails if required settings are absent. `/health` is unauthenticated and
+does not invoke a model. Every `/v1` route requires a Cognito access token in the
+Authorization Bearer header. Verification checks RS256 signature, issuer,
+expiry, issue time, token purpose, app client and UUID subject. The server never
+trusts a user ID header or body field. Sign-in remains a Cognito/client concern;
+the backend has no password or login endpoint. It does not print tokens or
+request bodies. Debug wire logging should remain disabled.
+
+Create requests require an `Idempotency-Key` header. A message may instead use
+`client_request_id`. Identical retries return the completed original response;
+changing the payload under the same key returns 409. Patches and deletes require
+`If-Match` with the last resource version. Creating the initial profile uses
+`If-Match: 0`. Lists return `items` and `next_cursor`. Date ranges are inclusive
+local dates, at most 366 days. A missing profile defaults date interpretation to
+UTC until the user configures a timezone; physical inputs are never invented.
+
+The HTTP interface includes profile and strategy calculation/history, intake
+CRUD and summaries, recipes, saved/frequent foods, hydration, accepted meal plans,
+check-ins, progress and confirmed behavior patterns. Conversation create/list/
+rename/archive/delete, text projection and message invocation use `/v1/conversations`.
+For local contract inspection without running AWS, call `create_app` with injected
+services and inspect `app.openapi()`; interactive API docs are not exposed publicly.
+
+## Architecture and semantics
+
+FastAPI routes and 34 local `@tool(context=True)` adapters call the same
+`NutritionService`. Trusted invocation state supplies the verified Cognito subject,
+services, conversation and request identity. The model cannot choose storage keys
+or another user. All DynamoDB queries are partition-scoped, paginated and key-based.
+Conditional transactions protect updates, date-key moves and mutation receipts.
+
+Strategies form an append-only effective timeline, with no plan ID. Calculated
+strategies are revalidated against the current profile on save. Manual target
+choices explicitly use `user_provided` calculation provenance. The implementation
+uses the [Mifflin-St Jeor equation](https://pubmed.ncbi.nlm.nih.gov/2305711/),
+self-reported activity multipliers and an explicitly approximate energy-to-weight
+conversion. Automated calculations are bounded adult estimates, not clinical
+prescriptions. Recipe arithmetic and logged totals are deterministic. Unlogged
+days remain unknown consumption, and unknown fiber/sodium are not invented zeros.
+
+Suggestions and coaching are generated through the conversation endpoint.
+Only accepted meal decisions and confirmed behavior patterns become canonical
+records. Planned-meal completion does not log food automatically. Recipe or
+saved-food edits do not rewrite previously logged nutrition snapshots. One
+balanced explicit response style is implemented; the presentation preference is
+stored for a future low-obsession experience.
+
+Strands 1.55.1 is pinned. Conversation ownership is checked before restoring a
+snapshot. A stable `dietitian` agent ID and native SnapshotSessionManager preserve:
+
+```text
+imhungry/<environment>/session/<conversation-id>/scopes/agent/dietitian/snapshots/snapshot_latest.json
+```
+
+The manager saves explicitly after a successful invocation using its native API;
+no custom transcript schema or immutable per-turn objects are introduced. Message
+reads project only user and assistant text, never raw snapshots, tool payloads or
+agent state. The current trusted prompt/date is refreshed after restoration.
+
+## Testing
+
+```bash
+UV_CACHE_DIR=/tmp/imhungry-uv-cache uv run pytest -q tests/test_repository.py tests/test_services.py
+UV_CACHE_DIR=/tmp/imhungry-uv-cache uv run pytest -q tests/test_api.py tests/test_features.py
+UV_CACHE_DIR=/tmp/imhungry-uv-cache uv run pytest -q tests/test_tool_contracts.py tests/test_conversations.py
+UV_CACHE_DIR=/tmp/imhungry-uv-cache uv run pytest -q
+git diff --check
+```
+
+Tests use Moto for DynamoDB/S3, local public-key verification fixtures and injected
+model responses. They do not call real AWS. Conversation tests execute the actual
+Strands loop through both tool and no-tool turns, persist/restore native snapshots,
+log food and use intake/profile context in the next response. This verifies
+integration behavior, not the reasoning quality of a live Bedrock model. One
+upstream Starlette/AnyIO deprecation warning may appear.
+
+## Limitations and future AWS setup
+
+- Select and configure an external nutrition database and known-restaurant menu
+  provider. Until then, lookup routes/tools return 503 `provider_unavailable`.
+  Bedrock structured estimation is implemented, injectable and locally tested;
+  its live model availability has not been tested. Restaurant advice can use
+  user-supplied menu information. Restaurant discovery remains a stretch goal.
+- Existing AWS setup must provide Cognito, a DynamoDB PK/SK table and GSI1
+  (`GSI1PK`, `GSI1SK`), a private encrypted bucket, and a backend execution role
+  permitted to query/get/transact DynamoDB, read/write/list/delete snapshots,
+  and invoke the configured Bedrock model. Configure gateway authorizers,
+  network access, encryption, monitoring and retention before deployment.
+  No IAM changes or deployment infrastructure are included.
+- Snapshot and DynamoDB commits cannot be one atomic transaction. Conversation
+  locks do not expire automatically: a failed or abandoned turn remains blocked
+  instead of risking duplicate tool writes or overwriting a newer snapshot.
+  Other conversations and ordinary resource routes remain available.
+- Operator recovery is intentionally not an HTTP/model tool. Stop the original
+  invocation process, inspect the owned metadata, completed receipt, latest
+  snapshot and any committed tool mutations; resolve the partial result before
+  conditionally clearing the matching lock/version. Never clear a lock solely
+  because enough time elapsed, and never replay a failed turn as a fresh request
+  without reconciling writes. Authorized AWS access is required for this work.
+- Deletion removes the snapshot and conversation response receipts before
+  metadata; a partial deletion stays locked for recovery. Independent food,
+  profile and coaching records are not deleted with a conversation.
+- Lists initially read the selected user's matching collection before slicing
+  cursor pages. Cursors are bound to user/query but concurrent edits can shift
+  offsets. Large histories may require storage-native pagination, a receipt
+  retention policy and measured aggregate caching; none is silently approximated.
+- Nutrition calculation bounds and coaching language need product/clinical review
+  before broader use. Live authentication, model quality, IAM and AWS connectivity
+  remain unverified. No frontend, mobile, notifications, workouts, images, MCP,
+  RAG, multi-agent system or deployment was added.
