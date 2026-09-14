@@ -15,9 +15,9 @@ from tools import (
     log_food,
 )
 
-DEFAULT_MODEL_ID = "global.anthropic.claude-sonnet-4-6"
+DEFAULT_MODEL_ID = "global.amazon.nova-2-lite-v1:0"
 DEFAULT_REGION = "us-west-2"
-DEFAULT_MAX_TOKENS = 800
+DEFAULT_MAX_TOKENS = 3000
 
 DIETITIAN_SYSTEM_PROMPT = """You are ImHungry, a practical and supportive AI dietitian.
 
@@ -39,6 +39,11 @@ Recommendation rules:
 - Personalize recommendations to the profile, activity level, dietary
   preferences, and what has already been logged today.
 - Prefer practical meals and explain briefly why they fit the user's context.
+- The current tools do not provide a calorie target. Never describe an intake
+  or meal as a calorie deficit, surplus, under target, or over target without an
+  explicit target from a tool. Say that exact target status cannot be determined.
+- Treat meal nutrition numbers as rough estimates and keep portion descriptions
+  consistent with those estimates (for example, distinguish cooked from dry grains).
 - This milestone uses one balanced response style. Keep the structured
   nutrition data in the tools separate from how recommendations are phrased,
   so a later presentation mode can change without changing the tools.
@@ -56,7 +61,7 @@ def _configured_model() -> BedrockModel:
     return BedrockModel(
         model_id=model_id,
         region_name=region_name,
-        temperature=0.2,
+        temperature=0,
         max_tokens=max_tokens,
     )
 
