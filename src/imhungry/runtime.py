@@ -33,4 +33,5 @@ def app_factory():
     # the menu provider must never turn a failed retrieval into invented values.
     services.estimation_provider = BedrockNutritionProvider(_configured_model)
     conversations = ConversationService(services, storage, create_dietitian_agent)
-    return create_app(services, verifier=CognitoVerifier(os.environ["COGNITO_ISSUER"], os.environ["COGNITO_CLIENT_ID"]), conversations=conversations)
+    origins = [origin.strip() for origin in os.getenv("IMHUNGRY_CORS_ORIGINS", "").split(",") if origin.strip()]
+    return create_app(services, verifier=CognitoVerifier(os.environ["COGNITO_ISSUER"], os.environ["COGNITO_CLIENT_ID"]), conversations=conversations, cors_origins=origins)

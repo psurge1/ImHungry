@@ -1,0 +1,25 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "ImHungry static React frontend on Amplify Hosting; authentication uses the existing Cognito pool.",
+  "Metadata": {"AWSToolsMetrics": {"AWSAgentToolkit": "aws-cloudformation@2"}},
+  "Parameters": {"Environment": {"Type": "String", "Default": "dev", "AllowedPattern": "[a-z0-9-]{1,40}"}},
+  "Resources": {
+    "App": {
+      "Type": "AWS::Amplify::App",
+      "Metadata": {"com.aws.cloudformation.Context": {"why": "Host built repository frontend without an additional server or GitHub credential.", "must": ["Use public Cognito identifiers only; never embed private keys or credentials."]}},
+      "Properties": {
+        "Name": {"Fn::Sub": "imhungry-${Environment}"}, "Platform": "WEB",
+        "CustomHeaders": "customHeaders:\n  - pattern: '**/*'\n    headers:\n      - key: X-Content-Type-Options\n        value: nosniff\n      - key: Referrer-Policy\n        value: strict-origin-when-cross-origin\n      - key: X-Frame-Options\n        value: DENY\n      - key: Content-Security-Policy\n        value: \"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://cognito-idp.us-west-2.amazonaws.com https://kud8sdryy0.execute-api.us-west-2.amazonaws.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'\"\n"
+      }
+    },
+    "Branch": {
+      "Type": "AWS::Amplify::Branch",
+      "Metadata": {"com.aws.cloudformation.Context": {"why": "Publish built static assets from this repository through repeatable manual deployment.", "must": ["Deploy frontend/dist contents rather than the source directory."]}},
+      "Properties": {"AppId": {"Fn::GetAtt": ["App", "AppId"]}, "BranchName": "main", "EnableAutoBuild": false, "Stage": "PRODUCTION", "Framework": "React"}
+    }
+  },
+  "Outputs": {
+    "AppId": {"Value": {"Fn::GetAtt": ["App", "AppId"]}, "Description": "Amplify Hosting application ID"},
+    "FrontendOrigin": {"Value": {"Fn::Sub": "https://main.${App.DefaultDomain}"}, "Description": "Frontend URL and allowed backend CORS origin"}
+  }
+}

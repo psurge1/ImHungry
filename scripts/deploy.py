@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("component", choices=["foundation", "backend"])
+    parser.add_argument("component", choices=["foundation", "backend", "frontend"])
     parser.add_argument("--region", default="us-west-2")
     parser.add_argument("--environment", default="dev")
     parser.add_argument("--execute", metavar="CHANGE_SET", help="Execute a previously reviewed change set")
@@ -29,6 +29,10 @@ def main():
         changes = change_set.get("Changes", [])
         for change in changes:
             item = change["ResourceChange"]
+            # Only an obsolete API snapshot may be removed during redeployment.
+            if (item["Action"] == "Remove" and item["ResourceType"] == "AWS::ApiGateway::Deployment"
+                    and any(c["ResourceChange"]["Action"] == "Add" and c["ResourceChange"]["ResourceType"] == "AWS::ApiGateway::Deployment" for c in changes)):
+                continue
             if item["Action"] not in {"Add", "Modify"} or item.get("Replacement") in {"True", "Conditional"}:
                 raise RuntimeError(f"Destructive change requires manual review: {item}")
         if not changes or change_set["ExecutionStatus"] != "AVAILABLE":
@@ -40,6 +44,8 @@ def main():
     template = json.loads((ROOT / "infra" / f"{args.component}.json").read_text())
     parameters = {"Environment": args.environment}
     if args.component == "backend":
+        frontend = cfn.describe_stacks(StackName=f"imhungry-{args.environment}-frontend")["Stacks"][0]
+        parameters["FrontendOrigin"] = next(o["OutputValue"] for o in frontend["Outputs"] if o["OutputKey"] == "FrontendOrigin")
         foundation = cfn.describe_stacks(StackName=f"imhungry-{args.environment}-foundation")["Stacks"][0]
         if foundation["StackStatus"] not in {"CREATE_COMPLETE", "UPDATE_COMPLETE"}:
             raise RuntimeError("The foundation stack must complete before backend deployment")
@@ -54,7 +60,9 @@ def main():
         # when API configuration changes, so updates reach the live stage.
         api_config = {key: value for key, value in template["Resources"].items()
                       if value["Type"].startswith("AWS::ApiGateway::") and key not in {"Stage", "Deployment"}}
-        revision = hashlib.sha256(json.dumps(api_config, sort_keys=True).encode()).hexdigest()[:12]
+        snapshot = {"resources": api_config, "origin": parameters["FrontendOrigin"],
+                    "dependencies": template["Resources"]["Deployment"]["DependsOn"]}
+        revision = hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode()).hexdigest()[:12]
         deployment = "Deployment" + revision
         template["Resources"][deployment] = template["Resources"].pop("Deployment")
         template["Resources"]["Stage"]["Properties"]["DeploymentId"] = {"Ref": deployment}

@@ -3,6 +3,13 @@
 Python 3.12 nutrition backend with FastAPI, one Strands dietitian agent, Bedrock,
 DynamoDB product records and native Strands S3 conversation snapshots.
 
+**Open the app:** https://main.d2sqqpgd3gb3c4.amplifyapp.com
+
+The React frontend lives in [frontend/](frontend/README.md), uses Amplify Auth
+with the existing Cognito pool, and is hosted on AWS Amplify. Create an account,
+verify your email and start with Setup. Its short implementation checklist is in
+[FRONTEND_IMPLEMENTATION.md](FRONTEND_IMPLEMENTATION.md).
+
 The four feature groups are defined in [FEATURES.md](FEATURES.md). The completed
 audit, feature/service/tool/endpoint/test matrix and staged implementation plan
 are in [IMPLEMENTATION.md](IMPLEMENTATION.md). Persistence and interfaces are
@@ -144,9 +151,8 @@ upstream Starlette/AnyIO deprecation warning may appear.
   invocation check; authenticated estimation through the deployed API is still
   unverified. Restaurant discovery remains a stretch goal.
 - Deployment uses the resources and scoped runtime permissions described in
-  [infra/README.md](infra/README.md). Configure a Cognito client integration for
-  sign-up and sign-in; frontend callback URLs and browser CORS origins are not
-  selected yet.
+  [infra/README.md](infra/README.md). The frontend uses Cognito SDK sign-in and
+  exact-origin CORS; it does not require an OAuth callback or hosted login domain.
 - Snapshot and DynamoDB commits cannot be one atomic transaction. Conversation
   locks do not expire automatically: a failed or abandoned turn remains blocked
   instead of risking duplicate tool writes or overwriting a newer snapshot.
@@ -166,5 +172,5 @@ upstream Starlette/AnyIO deprecation warning may appear.
   retention policy and measured aggregate caching; none is silently approximated.
 - Nutrition calculation bounds and coaching language need product/clinical review
   before broader use. See the deployment report for live verification results.
-  No frontend, mobile, notifications, workouts, images, MCP, RAG or multi-agent
+  No mobile, notifications, workouts, images, MCP, RAG or multi-agent
   system was added.

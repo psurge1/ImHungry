@@ -62,3 +62,17 @@ choices and authentication setup. No frontend is hosted. Cognito SDK sign-up/sig
 uses the pool and public client above; backend requests require the resulting access
 token. A hosted-login callback and browser CORS policy can be configured once the
 frontend origin is known. No dashboard changes were needed for this deployment.
+
+## Frontend deployment
+
+The subsequent frontend deployment is live at
+https://main.d2sqqpgd3gb3c4.amplifyapp.com (Amplify app `d2sqqpgd3gb3c4`, branch
+`main`, CloudFormation stack `imhungry-dev-frontend`). The frontend uses the Cognito
+pool and client above. The earlier "No frontend is hosted" note describes the
+initial backend-only deployment and is superseded by this section.
+
+The backend was updated with exact-origin CORS for this URL and localhost:5173.
+OPTIONS preflight is unauthenticated; product requests remain authenticated.
+Live preflight and unauthorized-response CORS headers were verified. Amplify
+published successfully and sign-in, account creation and recovery screens render.
+See [frontend guide](../frontend/README.md) for local development and publishing.

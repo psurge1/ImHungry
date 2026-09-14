@@ -210,7 +210,9 @@ Explicit tracking and low-obsession mode will use the same stored nutrition data
   REST streaming integration allows synchronous agent turns up to the configured
   Lambda timeout. Infrastructure and deployment settings are in infra/README.md.
 - Initial conversational responses are synchronous HTTP results
-- Cognito SDK sign-up/sign-in is enabled; a frontend and managed-login callback
-  URL remain to be selected.
+- The React frontend in frontend/ is hosted on Amplify and uses Amplify Authenticator
+  with Cognito SDK sign-up/sign-in. It requires no managed-login callback URL.
+  CORS allows its deployed origin and localhost development; OPTIONS bypasses
+  gateway auth for preflight, while all product operations remain protected.
 - HTTP contracts are defined in ToolsAndEndpoints.md
 - The external nutrition-data source used alongside food estimation

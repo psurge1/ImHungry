@@ -1,18 +1,19 @@
 # AWS deployment
 
-The backend uses two CloudFormation stacks in `us-west-2` by default:
+The application uses three CloudFormation stacks in `us-west-2` by default:
 
 - `imhungry-dev-foundation`: on-demand DynamoDB with GSI1 and point-in-time recovery,
   one private encrypted S3 bucket, and a Cognito user pool/public app client.
 - `imhungry-dev-backend`: Python 3.12 Lambda, its scoped execution role and log
   group, and a regional REST API with Cognito authorization and request throttling.
+- `imhungry-dev-frontend`: Amplify Hosting app and main branch for frontend/.
 
 The API exposes `/health` publicly. All `/v1` routes require a Cognito **access**
 token with `aws.cognito.signin.user.admin` scope, supplied by Cognito SDK sign-in.
 FastAPI also checks the token's client ID, issuer, signature and purpose. ID
 tokens are not accepted. Sign up and sign in through Cognito's SDK using the
-deployed pool and public client; email verification is enabled. No frontend or
-OAuth callback URL has been selected, so a hosted login domain is not deployed.
+deployed pool and public client; email verification is enabled. The React frontend
+uses Amplify Authenticator directly, so a hosted login domain is not needed.
 The public client has no client secret. Never put a password or token in Git.
 
 Lambda Web Adapter 1.0.1 (published x86_64 layer version 28) runs the existing
@@ -45,12 +46,15 @@ Run from the repository root with the existing authorized AWS CLI/SDK session:
 
 ```bash
 uv run python scripts/build_lambda.py
-uvx --from cfn-lint cfn-lint infra/foundation.json infra/backend.json
+uvx --from cfn-lint cfn-lint infra/foundation.json infra/backend.json infra/frontend.json
 uv run python scripts/deploy.py foundation
 # Review the printed resource changes, then execute the exact change set name:
 uv run python scripts/deploy.py foundation --execute app-CHANGE_SET_ID
 aws cloudformation describe-stacks --stack-name imhungry-dev-foundation --region us-west-2
-# Wait for CREATE_COMPLETE or UPDATE_COMPLETE before preparing the backend:
+# Wait for CREATE_COMPLETE or UPDATE_COMPLETE, then create frontend hosting:
+uv run python scripts/deploy.py frontend
+uv run python scripts/deploy.py frontend --execute app-CHANGE_SET_ID
+# Wait for the frontend stack to complete before preparing the backend:
 uv run python scripts/deploy.py backend
 uv run python scripts/deploy.py backend --execute app-CHANGE_SET_ID
 aws cloudformation describe-stacks --stack-name imhungry-dev-backend --region us-west-2
@@ -59,11 +63,11 @@ aws cloudformation describe-stacks --stack-name imhungry-dev-backend --region us
 The builder exports the existing dependency lock with hashes and packages Linux
 x86_64 wheels, not locally installed macOS libraries. Artifacts remain in ignored
 `.build/`. The backend preparation uploads a content-addressed ZIP and reads
-foundation outputs automatically. `--region` and `--environment` must match for
-both stacks. Execution refuses resource replacements or removals; those require
-manual review. A code-only update modifies the function in place. API method
-changes generate a new immutable API deployment and therefore require review of
-the old deployment's removal before manual execution of that change set.
+foundation and frontend outputs automatically. `--region` and `--environment`
+must match for all stacks. Execution refuses replacements and removals except
+an obsolete API deployment when a new deployment replaces it. A code-only update
+modifies the function in place. After infrastructure completes, publish the site
+with `uv run python scripts/publish_frontend.py`.
 
 `infra/security.guard` checks encrypted/private storage, retention and protection,
 Cognito access-token authorization, and public app clients. It can be run with

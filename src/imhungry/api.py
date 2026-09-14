@@ -7,6 +7,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Body, Depends, Header, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import Field, ValidationError
 
 from .auth import deny_authentication
@@ -15,8 +16,13 @@ from .models import RECORDS, Strategy, StrategyCalculationRequest, Recipe, FoodE
 from .providers import run_async
 
 
-def create_app(services, *, verifier=deny_authentication, conversations=None):
+def create_app(services, *, verifier=deny_authentication, conversations=None, cors_origins=()):
     app = FastAPI(title="ImHungry", docs_url=None, redoc_url=None, openapi_url=None)
+    if cors_origins:
+        app.add_middleware(CORSMiddleware, allow_origins=list(cors_origins),
+                           allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+                           allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "If-Match"],
+                           expose_headers=["X-Request-ID"], max_age=600)
     app.state.services = services
     app.state.conversations = conversations
 

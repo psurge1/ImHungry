@@ -7,6 +7,7 @@
     }
   },
   "Parameters": {
+    "FrontendOrigin": {"Type": "String", "Default": "", "AllowedPattern": "^$|https://[a-zA-Z0-9.-]+"},
     "Environment": {
       "Type": "String",
       "Default": "dev",
@@ -39,6 +40,28 @@
     }
   },
   "Resources": {
+    "V1Options": {
+      "Type": "AWS::ApiGateway::Method",
+      "Metadata": {"com.aws.cloudformation.Context": {"why": "Allow unauthenticated browser preflight; FastAPI validates the origin.", "must": ["Only OPTIONS bypasses authorization."]}},
+      "Properties": {"RestApiId": {"Ref": "Api"}, "ResourceId": {"Ref": "V1Resource"}, "HttpMethod": "OPTIONS", "AuthorizationType": "NONE",
+        "Integration": {"Type": "AWS_PROXY", "IntegrationHttpMethod": "POST", "Uri": {"Fn::Sub": "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2021-11-15/functions/${Backend.Arn}/response-streaming-invocations"}, "ResponseTransferMode": "STREAM", "TimeoutInMillis": 250000}}
+    },
+    "ProxyOptions": {
+      "Type": "AWS::ApiGateway::Method",
+      "Metadata": {"com.aws.cloudformation.Context": {"why": "Preflight for authenticated API routes; no product data returned.", "must": ["Only OPTIONS bypasses authorization."]}},
+      "Properties": {"RestApiId": {"Ref": "Api"}, "ResourceId": {"Ref": "ProxyResource"}, "HttpMethod": "OPTIONS", "AuthorizationType": "NONE",
+        "Integration": {"Type": "AWS_PROXY", "IntegrationHttpMethod": "POST", "Uri": {"Fn::Sub": "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2021-11-15/functions/${Backend.Arn}/response-streaming-invocations"}, "ResponseTransferMode": "STREAM", "TimeoutInMillis": 250000}}
+    },
+    "GatewayClientErrors": {
+      "Type": "AWS::ApiGateway::GatewayResponse",
+      "Metadata": {"com.aws.cloudformation.Context": {"why": "Let the deployed frontend read gateway authorization and throttling errors.", "must": ["Use the configured frontend origin, never a wildcard."]}},
+      "Properties": {"RestApiId": {"Ref": "Api"}, "ResponseType": "DEFAULT_4XX", "ResponseParameters": {"gatewayresponse.header.Access-Control-Allow-Origin": {"Fn::Sub": "'${FrontendOrigin}'"}}}
+    },
+    "GatewayServerErrors": {
+      "Type": "AWS::ApiGateway::GatewayResponse",
+      "Metadata": {"com.aws.cloudformation.Context": {"why": "Let the deployed frontend read gateway failure responses.", "must": ["Use the configured frontend origin, never a wildcard."]}},
+      "Properties": {"RestApiId": {"Ref": "Api"}, "ResponseType": "DEFAULT_5XX", "ResponseParameters": {"gatewayresponse.header.Access-Control-Allow-Origin": {"Fn::Sub": "'${FrontendOrigin}'"}}}
+    },
     "FunctionLogs": {
       "Type": "AWS::Logs::LogGroup",
       "Metadata": {
@@ -225,6 +248,7 @@
               "Ref": "ModelId"
             },
             "STRANDS_MAX_TOKENS": "3000",
+            "IMHUNGRY_CORS_ORIGINS": {"Fn::Sub": "${FrontendOrigin},http://localhost:5173,http://127.0.0.1:5173"},
             "AWS_LAMBDA_EXEC_WRAPPER": "/opt/bootstrap",
             "AWS_LWA_INVOKE_MODE": "response_stream",
             "AWS_LWA_READINESS_CHECK_PATH": "/health",
@@ -477,6 +501,10 @@
         }
       },
       "DependsOn": [
+        "GatewayClientErrors",
+        "GatewayServerErrors",
+        "V1Options",
+        "ProxyOptions",
         "HealthMethod",
         "V1Method",
         "ProxyMethod"
