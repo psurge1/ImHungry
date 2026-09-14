@@ -277,6 +277,17 @@ def get_hydration_summary(
 
 `lookup_food_nutrition` prefers documented provider values and returns source metadata. `estimate_food_nutrition` is used when lookup fails or the food is homemade/underspecified; it returns ranges, confidence, and assumptions. Neither tool logs food automatically.
 
+`lookup_restaurant_menu` is the model-facing retrieval tool for known restaurants.
+The production `WebMenuProvider` fetches public HTTPS pages from MenuMacros and,
+when the caller supplies an official menu URL, the Macros.Menu URL-analysis
+proxy. It conservatively parses only items with calories, protein, carbohydrate
+and fat together, preserves the source URL, and labels third-party values as
+medium-confidence external estimates. It does not bypass authentication or
+discover restaurants. If no page responds or no complete item is parseable, the
+tool returns `status = unavailable` and a structured instruction to call
+`estimate_food_nutrition` from the user's item and portion. This is a tool result,
+not a fabricated menu response.
+
 `edit_food` also implements replacement: it updates the selected historical entry with a new food and nutrition snapshot. `get_nutrition_summary` returns daily totals, period averages, the applicable targets, and differences from those targets. Frequently eaten foods are calculated from recent intake fingerprints so edits and removals cannot leave incorrect counters behind.
 
 Recipe calculation is a preview; `save_recipe` persists only when requested. Recipe edits do not alter historical food logs because logs retain their own nutrition snapshots.
@@ -297,6 +308,7 @@ def lookup_restaurant_menu(
     restaurant_name: str,
     location: str | None = None,
     query: str | None = None,
+    menu_url: str | None = None,
 ) -> dict: ...
 
 @tool(context=True)
@@ -330,7 +342,7 @@ def remove_planned_meal(
 
 `get_meal_decision_context` is an aggregate read optimized for the agent. It returns the profile restrictions and preferences, applicable strategy, intake and hydration so far, remaining targets, relevant saved/frequent foods and recipes, and already planned meals. This avoids forcing the model to make several predictable round trips before every recommendation.
 
-The model uses that context to create meal suggestions, new-food ideas, substitutions, and eating-out strategies. Only a choice the user accepts becomes a `PLANNED_MEAL`. `lookup_restaurant_menu` is a provider-neutral contract and remains unimplemented until a documented nutrition-data source is selected. It searches a known restaurant's menu; it does not discover restaurants.
+The model uses that context to create meal suggestions, new-food ideas, substitutions, and eating-out strategies. Only a choice the user accepts becomes a `PLANNED_MEAL`. `lookup_restaurant_menu` searches documented public menu sources for a known restaurant and returns an explicit estimation fallback when retrieval fails; it does not discover restaurants.
 
 ### 4. Adaptive Diet Coaching Tools
 
@@ -483,7 +495,7 @@ The message endpoint is the only general AI endpoint. Meal recommendations, subs
 | `GET` | `/v1/planned-meals/{entry_ref}` | Get one planned meal. |
 | `PATCH` | `/v1/planned-meals/{entry_ref}` | Replace, reschedule, complete, or skip a planned meal. |
 | `DELETE` | `/v1/planned-meals/{entry_ref}` | Remove a planned meal. |
-| `GET` | `/v1/restaurant-menus/search` | Search a known restaurant's documented menu nutrition; provider implementation remains pending. |
+| `GET` | `/v1/restaurant-menus/search` | Search known public menu sources; returns a structured estimation fallback when retrieval is unavailable. `menu_url` may point to an HTTPS official menu URL. |
 
 There is intentionally no `/restaurants/search` endpoint in the core API because restaurant discovery is a stretch goal.
 

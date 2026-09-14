@@ -99,8 +99,9 @@ def estimate_result():
 
 
 def test_provider_estimation_and_unavailable_contract(service):
-    with pytest.raises(AppError, match="not configured"):
-        service.restaurant_menu("alice", "Known restaurant")
+    fallback = service.restaurant_menu("alice", "Known restaurant")
+    assert fallback["status"] == "unavailable"
+    assert fallback["fallback"]["tool"] == "estimate_food_nutrition"
     class Model:
         async def structured_output(self, output_model, prompt, system_prompt=None):
             assert "entire described quantity" in system_prompt
@@ -115,7 +116,9 @@ def test_provider_estimation_and_unavailable_contract(service):
     with pytest.raises(AppError):
         service.lookup_food("alice", {"query": "yogurt"})
     client = TestClient(create_app(service, verifier=lambda token: token))
-    assert client.get("/v1/restaurant-menus/search?restaurant_name=Known", headers={"Authorization": "Bearer alice"}).status_code == 503
+    response = client.get("/v1/restaurant-menus/search?restaurant_name=Known", headers={"Authorization": "Bearer alice"})
+    assert response.status_code == 200
+    assert response.json()["fallback"]["tool"] == "estimate_food_nutrition"
 
 
 def test_all_feature_write_tools_use_shared_services(service):

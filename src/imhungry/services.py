@@ -63,6 +63,7 @@ class NutritionService:
         self.repo = repository
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.provider = provider
+        self.estimation_provider = provider
 
     def now(self):
         return utc(self.clock())
@@ -446,9 +447,10 @@ class NutritionService:
 
     def estimate_food(self, user, request):
         req = FoodEstimateRequest.model_validate(request)
-        if not self.provider:
+        provider = self.estimation_provider if self.estimation_provider is not None else self.provider
+        if not provider:
             raise AppError("provider_unavailable", "Nutrition estimation provider is not configured", 503)
-        result = EstimatedNutrition.model_validate(self.provider.estimate(req))
+        result = EstimatedNutrition.model_validate(provider.estimate(req))
         if result.source.type != "model_estimate":
             raise AppError("provider_result", "Estimation must identify model provenance", 503)
         for field, known in req.known_nutrition.items():
@@ -456,9 +458,27 @@ class NutritionService:
                 raise AppError("provider_result", "Estimate changed supplied nutrition values", 503)
         return result.data()
 
-    def restaurant_menu(self, user, restaurant_name, location=None, query=None):
+    def restaurant_menu(self, user, restaurant_name, location=None, query=None, menu_url=None):
         if not restaurant_name or len(restaurant_name) > 200:
             raise AppError("validation", "Provide a restaurant name up to 200 characters")
         if not self.provider:
-            raise AppError("provider_unavailable", "Restaurant menu provider is not configured", 503)
-        return {"items": [NutritionResult.model_validate(item).data() for item in self.provider.menu(restaurant_name, location, query)]}
+            return self._menu_fallback(restaurant_name, location, query, "No menu provider is configured")
+        try:
+            items = self.provider.menu(restaurant_name, location, query, menu_url)
+        except AppError as error:
+            if error.code == "provider_unavailable":
+                return self._menu_fallback(restaurant_name, location, query, error.message)
+            raise
+        return {"status": "ok", "items": [NutritionResult.model_validate(item).data() for item in items],
+                "fallback": None}
+
+    @staticmethod
+    def _menu_fallback(restaurant_name, location, query, reason):
+        return {"status": "unavailable", "items": [], "fallback": {
+            "tool": "estimate_food_nutrition",
+            "reason": reason,
+            "restaurant_name": restaurant_name,
+            "location": location,
+            "query": query,
+            "instruction": "Ask the user for the menu item and portion, then call estimate_food_nutrition. Label the result as an estimate with ranges and assumptions; do not present it as restaurant-published nutrition.",
+        }}

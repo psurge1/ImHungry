@@ -129,11 +129,16 @@ upstream Starlette/AnyIO deprecation warning may appear.
 
 ## Limitations and future AWS setup
 
-- Select and configure an external nutrition database and known-restaurant menu
-  provider. Until then, lookup routes/tools return 503 `provider_unavailable`.
-  Bedrock structured estimation is implemented, injectable and locally tested;
-  its live model availability has not been tested. Restaurant advice can use
-  user-supplied menu information. Restaurant discovery remains a stretch goal.
+- A public menu adapter now tries MenuMacros chain pages and the Macros.Menu
+  HTTPS URL-analysis proxy. It preserves source URLs and only accepts complete
+  calorie/protein/carbohydrate/fat groups. If retrieval fails, the restaurant
+  tool returns a structured instruction to estimate from the user's menu item
+  and portion. This is deliberately conservative because third-party pages can
+  be stale or estimated; the agent should recommend checking official restaurant
+  nutrition pages for current values and allergies. General food lookup still
+  needs a selected database provider. Bedrock structured estimation is
+  implemented, injectable and locally tested; its live model availability has
+  not been tested. Restaurant discovery remains a stretch goal.
 - Existing AWS setup must provide Cognito, a DynamoDB PK/SK table and GSI1
   (`GSI1PK`, `GSI1SK`), a private encrypted bucket, and a backend execution role
   permitted to query/get/transact DynamoDB, read/write/list/delete snapshots,

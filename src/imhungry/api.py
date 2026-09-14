@@ -147,8 +147,8 @@ def create_app(services, *, verifier=deny_authentication, conversations=None):
         return services.estimate_food(user, request.data())
 
     @app.get("/v1/restaurant-menus/search")
-    def menu(restaurant_name: str, location: str | None = None, query: str | None = None, user=Depends(identity)):
-        return services.restaurant_menu(user, restaurant_name, location, query)
+    def menu(restaurant_name: str, location: str | None = None, query: str | None = None, menu_url: str | None = None, user=Depends(identity)):
+        return services.restaurant_menu(user, restaurant_name, location, query, menu_url)
 
     for kind in ("food-log", "recipes", "saved-foods", "hydration", "planned-meals", "check-ins", "behavior-patterns"):
         resource_routes(kind)

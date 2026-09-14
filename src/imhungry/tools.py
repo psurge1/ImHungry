@@ -238,10 +238,10 @@ def estimate_food_nutrition(tool_context: ToolContext, request: FoodEstimateRequ
 
 
 @safe_tool
-def lookup_restaurant_menu(tool_context: ToolContext, restaurant_name: str, location: str | None = None, query: str | None = None) -> dict:
-    """Look up a known restaurant's documented menu; this does not discover restaurants."""
+def lookup_restaurant_menu(tool_context: ToolContext, restaurant_name: str, location: str | None = None, query: str | None = None, menu_url: str | None = None) -> dict:
+    """Search documented menu sources; if unavailable, return instructions to estimate macros from menu text."""
     services, user = context(tool_context)
-    return services.restaurant_menu(user, restaurant_name, location, query)
+    return services.restaurant_menu(user, restaurant_name, location, query, menu_url)
 
 
 def update_adapter(name, kind):
