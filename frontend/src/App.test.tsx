@@ -14,15 +14,28 @@ afterEach(cleanup);
 function open() { render(<QueryClientProvider client={new QueryClient({defaultOptions: {queries: {retry: false}}})}><App onSignOut={() => {}}/></QueryClientProvider>); }
 it('creates the initial profile using version zero and backend field names', async () => {
   open(); fireEvent.click(screen.getByRole('button', {name: 'Setup'}));
-  const height = await screen.findByLabelText('Height (cm)');
-  fireEvent.change(height, {target: {value: '178'}});
+  const height = await screen.findByLabelText('Height (in)');
+  fireEvent.change(height, {target: {value: '70'}});
   fireEvent.change(screen.getByLabelText('Date of birth'), {target: {value: '1995-04-12'}});
   fireEvent.change(screen.getByLabelText('Sex used for BMR calculation'), {target: {value: 'male'}});
   fireEvent.change(screen.getByLabelText('Activity level'), {target: {value: 'lightly_active'}});
   fireEvent.change(screen.getByLabelText('Allergies (comma-separated)'), {target: {value: 'peanuts, shellfish'}});
   fireEvent.click(screen.getByRole('button', {name: 'Save profile'}));
   await waitFor(() => expect(api).toHaveBeenCalledWith('/v1/profile', expect.objectContaining({method: 'PATCH', version: 0,
-    body: expect.objectContaining({height_cm: 178, date_of_birth: '1995-04-12', sex_for_bmr_equation: 'male', activity_context: {level: 'lightly_active'}, allergies: ['peanuts', 'shellfish']})})));
+    body: expect.objectContaining({height_cm: 177.8, unit_system: 'imperial', date_of_birth: '1995-04-12', sex_for_bmr_equation: 'male', activity_context: {level: 'lightly_active'}, allergies: ['peanuts', 'shellfish']})})));
+});
+it('converts US weight inputs before calculating targets', async () => {
+  vi.mocked(api).mockImplementation(async path => {
+    if (path === '/v1/profile') return {version: 1, timezone: 'America/Chicago', height_cm: 180, date_of_birth: '1995-04-12', sex_for_bmr_equation: 'male', activity_context: {level: 'moderately_active'}, dietary_preferences: [], dietary_restrictions: [], allergies: [], disliked_foods: []};
+    if (path === '/v1/nutrition-strategies/current') return {strategy: null};
+    return {};
+  });
+  open(); fireEvent.click(screen.getByRole('button', {name: 'Setup'}));
+  fireEvent.change(await screen.findByLabelText('Starting weight (lb)'), {target: {value: '155'}});
+  fireEvent.change(screen.getByLabelText('Goal weight (lb, for weight loss)'), {target: {value: '145'}});
+  fireEvent.change(screen.getByLabelText('Desired loss (lb/week, for weight loss)'), {target: {value: '0.5'}});
+  fireEvent.click(screen.getByRole('button', {name: 'Calculate targets'}));
+  await waitFor(() => expect(api).toHaveBeenCalledWith('/v1/nutrition-strategies/calculate', expect.objectContaining({body: {goal: {type: 'maintain_weight', baseline_weight_kg: 70.307, goal_weight_kg: 70.307, desired_rate_kg_per_week: 0}}})));
 });
 it('keeps the same message and request key when retrying an ambiguous failure', async () => {
   let attempts = 0;
