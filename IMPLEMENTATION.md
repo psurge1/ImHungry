@@ -114,3 +114,7 @@ Updated as stages complete. This milestone ends after Stage 4 verification.
 - Stage 1: domain validation and both repository adapters tested locally,
   including atomic conflicts/moves, sparse index, all-page reads, and isolation.
   Runtime dependencies are locked; Moto is a development-only AWS emulator.
+- Stage 1 committed and pushed as d7f2ab8; full suite: 22 passed.
+- Stage 2: profile/strategy/food services, FastAPI and trusted-context tools;
+  Cognito verification is tested with ephemeral local signing keys. Local tests
+  cover identity, replay, validation, timezone corrections and historical targets.
