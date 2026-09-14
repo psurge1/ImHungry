@@ -154,12 +154,29 @@ conversation agent. No fifth group or plan ID was introduced. S3's frozen native
 schema and key layout are unchanged. Operational response receipts and fail-closed
 conversation coordination are explicitly documented additions to DynamoDB.
 
-Deferred as documented: an external food database and restaurant-menu provider,
-restaurant discovery, the second presentation experience, and live AWS deployment/
-verification. Bedrock structured estimation is implemented and fake-model-tested.
+Deferred at the end of that milestone: an external food database and restaurant-menu
+provider, restaurant discovery, the second presentation experience, and live AWS
+deployment/verification. See the follow-up stages below for subsequent work.
+Bedrock structured estimation is implemented and fake-model-tested.
 Tests prove orchestration, not the quality of live model recommendations.
 
 README.md contains local run commands, resource requirements and a partial-failure
 recovery procedure. `skills-lock.json` remains the user's untracked file, unchanged.
-No live AWS calls, resource creation, IAM edits, secrets or .env files were used in
-implementation commits. Stage 4 is the end of this implementation milestone.
+No live AWS calls, resource creation, IAM edits, secrets or .env files were used
+during stages 1 through 4. Stage 4 ended that implementation milestone.
+
+
+## Follow-up: restaurant providers and AWS deployment
+
+- Commit `ebf99bf` added public restaurant menu retrieval and structured estimation
+  fallback. General food database integration remains deferred.
+- Following explicit user authorization, two CloudFormation stacks provisioned
+  the required persistent resources and the Lambda/API Gateway backend in
+  `us-west-2`. Infrastructure, build scripts, deployment safeguards and resource
+  configuration are documented in `infra/README.md`.
+- `infra/DEPLOYMENT.md` records the live endpoint, Cognito identifiers, checks
+  performed and the remaining authenticated conversation verification boundary.
+- Both stacks completed, the public health endpoint and authorization rejection
+  checks passed, and a live Bedrock model call succeeded. The application suite
+  remains at 80 passing tests. No frontend or additional product feature group
+  was introduced.

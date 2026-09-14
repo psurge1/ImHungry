@@ -204,10 +204,13 @@ S3 was selected specifically because Strands supports persistent session snapsho
 
 Explicit tracking and low-obsession mode will use the same stored nutrition data and backend tools. A user preference will control how results are presented: explicit mode can expose calories, macros, and targets, while implicit mode can frame the same reasoning around meals, portions, hunger, energy, and habits.
 
-## Decisions Still Open
+## Deployment Decisions and Remaining Choices
 
-- The compute environment that will host FastAPI, such as Lambda or a container service
+- FastAPI runs on Lambda through AWS Lambda Web Adapter; a regional API Gateway
+  REST streaming integration allows synchronous agent turns up to the configured
+  Lambda timeout. Infrastructure and deployment settings are in infra/README.md.
 - Initial conversational responses are synchronous HTTP results
-- Cognito managed login versus a custom login interface
+- Cognito SDK sign-up/sign-in is enabled; a frontend and managed-login callback
+  URL remain to be selected.
 - HTTP contracts are defined in ToolsAndEndpoints.md
 - The external nutrition-data source used alongside food estimation

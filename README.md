@@ -31,10 +31,13 @@ model with ephemeral local data. This CLI is a local development harness with a
 fixed local identity; it cannot access production DynamoDB or S3. There is no
 development identity override in the production HTTP application.
 
-## Run the HTTP backend against existing AWS resources
+## AWS deployment and HTTP backend
 
-No infrastructure is provisioned by this repository. Configure these non-secret
-environment settings after the resources and backend execution role exist:
+The CloudFormation templates in [infra](infra/README.md) provision the app storage,
+Cognito identities, Lambda backend and API Gateway. The deployment guide includes
+repeatable build, validation and change-set commands. [Current deployment](infra/DEPLOYMENT.md)
+records the live endpoint, identifiers and verification. To run the HTTP server locally
+against those resources, configure these non-secret environment settings:
 
 | Setting | Purpose |
 | --- | --- |
@@ -127,7 +130,7 @@ log food and use intake/profile context in the next response. This verifies
 integration behavior, not the reasoning quality of a live Bedrock model. One
 upstream Starlette/AnyIO deprecation warning may appear.
 
-## Limitations and future AWS setup
+## Limitations and operation
 
 - A public menu adapter now tries MenuMacros chain pages and the Macros.Menu
   HTTPS URL-analysis proxy. It preserves source URLs and only accepts complete
@@ -137,14 +140,13 @@ upstream Starlette/AnyIO deprecation warning may appear.
   be stale or estimated; the agent should recommend checking official restaurant
   nutrition pages for current values and allergies. General food lookup still
   needs a selected database provider. Bedrock structured estimation is
-  implemented, injectable and locally tested; its live model availability has
-  not been tested. Restaurant discovery remains a stretch goal.
-- Existing AWS setup must provide Cognito, a DynamoDB PK/SK table and GSI1
-  (`GSI1PK`, `GSI1SK`), a private encrypted bucket, and a backend execution role
-  permitted to query/get/transact DynamoDB, read/write/list/delete snapshots,
-  and invoke the configured Bedrock model. Configure gateway authorizers,
-  network access, encryption, monitoring and retention before deployment.
-  No IAM changes or deployment infrastructure are included.
+  implemented, injectable and locally tested. The configured model passed a live
+  invocation check; authenticated estimation through the deployed API is still
+  unverified. Restaurant discovery remains a stretch goal.
+- Deployment uses the resources and scoped runtime permissions described in
+  [infra/README.md](infra/README.md). Configure a Cognito client integration for
+  sign-up and sign-in; frontend callback URLs and browser CORS origins are not
+  selected yet.
 - Snapshot and DynamoDB commits cannot be one atomic transaction. Conversation
   locks do not expire automatically: a failed or abandoned turn remains blocked
   instead of risking duplicate tool writes or overwriting a newer snapshot.
@@ -163,6 +165,6 @@ upstream Starlette/AnyIO deprecation warning may appear.
   offsets. Large histories may require storage-native pagination, a receipt
   retention policy and measured aggregate caching; none is silently approximated.
 - Nutrition calculation bounds and coaching language need product/clinical review
-  before broader use. Live authentication, model quality, IAM and AWS connectivity
-  remain unverified. No frontend, mobile, notifications, workouts, images, MCP,
-  RAG, multi-agent system or deployment was added.
+  before broader use. See the deployment report for live verification results.
+  No frontend, mobile, notifications, workouts, images, MCP, RAG or multi-agent
+  system was added.

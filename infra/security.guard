@@ -1,0 +1,35 @@
+let buckets = Resources.*[ Type == 'AWS::S3::Bucket' ]
+rule private_encrypted_buckets when %buckets !empty {
+    %buckets {
+        DeletionPolicy == 'Retain'
+        UpdateReplacePolicy == 'Retain'
+        Properties.PublicAccessBlockConfiguration {
+            BlockPublicAcls == true
+            BlockPublicPolicy == true
+            IgnorePublicAcls == true
+            RestrictPublicBuckets == true
+        }
+        Properties.BucketEncryption.ServerSideEncryptionConfiguration[*].ServerSideEncryptionByDefault.SSEAlgorithm == 'AES256'
+    }
+}
+let tables = Resources.*[ Type == 'AWS::DynamoDB::Table' ]
+rule protected_tables when %tables !empty {
+    %tables {
+        DeletionPolicy == 'Retain'
+        UpdateReplacePolicy == 'Retain'
+        Properties.SSESpecification.SSEEnabled == true
+        Properties.DeletionProtectionEnabled == true
+        Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled == true
+    }
+}
+let product_methods = Resources.*[ Type == 'AWS::ApiGateway::Method' Properties.HttpMethod == 'ANY' ]
+rule authenticated_product_routes when %product_methods !empty {
+    %product_methods.Properties {
+        AuthorizationType == 'COGNITO_USER_POOLS'
+        AuthorizationScopes == ['aws.cognito.signin.user.admin']
+    }
+}
+let clients = Resources.*[ Type == 'AWS::Cognito::UserPoolClient' ]
+rule public_clients when %clients !empty {
+    %clients.Properties.GenerateSecret == false
+}

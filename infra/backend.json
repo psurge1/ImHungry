@@ -1,0 +1,546 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "ImHungry FastAPI backend on Lambda with a Cognito-protected regional streaming REST API for synchronous AI conversations.",
+  "Metadata": {
+    "AWSToolsMetrics": {
+      "AWSAgentToolkit": "aws-cloudformation@2"
+    }
+  },
+  "Parameters": {
+    "Environment": {
+      "Type": "String",
+      "Default": "dev",
+      "AllowedPattern": "[a-z0-9-]{1,40}"
+    },
+    "TableName": {
+      "Type": "String"
+    },
+    "BucketName": {
+      "Type": "String"
+    },
+    "UserPoolArn": {
+      "Type": "String"
+    },
+    "ClientId": {
+      "Type": "String"
+    },
+    "Issuer": {
+      "Type": "String"
+    },
+    "ArtifactKey": {
+      "Type": "String"
+    },
+    "ModelId": {
+      "Type": "String",
+      "Default": "global.amazon.nova-2-lite-v1:0",
+      "AllowedValues": [
+        "global.amazon.nova-2-lite-v1:0"
+      ]
+    }
+  },
+  "Resources": {
+    "FunctionLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Backend diagnostics with bounded retention; HTTP access logging disabled in Uvicorn to avoid query data.",
+          "must": [
+            "Never log tokens, request bodies, or conversation content."
+          ]
+        }
+      },
+      "Properties": {
+        "RetentionInDays": 14
+      }
+    },
+    "ExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Only runtime data, snapshot, logging and selected Nova inference permissions.",
+          "must": [
+            "No IAM administration, scans, artifact access, or other app resources. Model region wildcard is required for global inference routing."
+          ]
+        }
+      },
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "AppResources",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "FunctionLogs",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:Query",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:ConditionCheckItem"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}/index/GSI1"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${BucketName}/imhungry/${Environment}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${BucketName}"
+                  },
+                  "Condition": {
+                    "StringLike": {
+                      "s3:prefix": {
+                        "Fn::Sub": "imhungry/${Environment}/*"
+                      }
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "bedrock:InvokeModel",
+                    "bedrock:InvokeModelWithResponseStream"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${ModelId}"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Backend": {
+      "Type": "AWS::Lambda::Function",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Unmodified ASGI app via pinned AWS Lambda Web Adapter; scales to zero, no VPC/NAT or always-on container.",
+          "must": [
+            "Timeout must stay below regional gateway idle timeout. Auth enforced in FastAPI as well as gateway."
+          ]
+        }
+      },
+      "Properties": {
+        "Runtime": "python3.12",
+        "Architectures": [
+          "x86_64"
+        ],
+        "Handler": "run.sh",
+        "Code": {
+          "S3Bucket": {
+            "Ref": "BucketName"
+          },
+          "S3Key": {
+            "Ref": "ArtifactKey"
+          }
+        },
+        "Role": {
+          "Fn::GetAtt": [
+            "ExecutionRole",
+            "Arn"
+          ]
+        },
+        "MemorySize": 1024,
+        "Timeout": 240,
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "FunctionLogs"
+          }
+        },
+        "Layers": [
+          {
+            "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:753240598075:layer:LambdaAdapterLayerX86:28"
+          }
+        ],
+        "Environment": {
+          "Variables": {
+            "IMHUNGRY_TABLE": {
+              "Ref": "TableName"
+            },
+            "IMHUNGRY_BUCKET": {
+              "Ref": "BucketName"
+            },
+            "IMHUNGRY_ENV": {
+              "Ref": "Environment"
+            },
+            "COGNITO_ISSUER": {
+              "Ref": "Issuer"
+            },
+            "COGNITO_CLIENT_ID": {
+              "Ref": "ClientId"
+            },
+            "STRANDS_MODEL_ID": {
+              "Ref": "ModelId"
+            },
+            "STRANDS_MAX_TOKENS": "3000",
+            "AWS_LAMBDA_EXEC_WRAPPER": "/opt/bootstrap",
+            "AWS_LWA_INVOKE_MODE": "response_stream",
+            "AWS_LWA_READINESS_CHECK_PATH": "/health",
+            "AWS_LWA_ASYNC_INIT": "true",
+            "PORT": "8000"
+          }
+        }
+      }
+    },
+    "Api": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Regional streaming API supports longer agent turns than a buffered HTTP API.",
+          "must": [
+            "Only /health is public; /v1 routes require Cognito access tokens."
+          ]
+        }
+      },
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-api"
+        },
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        }
+      }
+    },
+    "Authorizer": {
+      "Type": "AWS::ApiGateway::Authorizer",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Gateway validates Cognito tokens before invoking the backend.",
+          "must": [
+            "Method scope selects access tokens; FastAPI further binds the app client."
+          ]
+        }
+      },
+      "Properties": {
+        "Name": "CognitoAccess",
+        "RestApiId": {
+          "Ref": "Api"
+        },
+        "Type": "COGNITO_USER_POOLS",
+        "IdentitySource": "method.request.header.Authorization",
+        "ProviderARNs": [
+          {
+            "Ref": "UserPoolArn"
+          }
+        ]
+      }
+    },
+    "HealthResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Public liveness route.",
+          "must": []
+        }
+      },
+      "Properties": {
+        "RestApiId": {
+          "Ref": "Api"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "Api",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "health"
+      }
+    },
+    "V1Resource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Authenticated API namespace.",
+          "must": []
+        }
+      },
+      "Properties": {
+        "RestApiId": {
+          "Ref": "Api"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "Api",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "v1"
+      }
+    },
+    "ProxyResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Forward current and future v1 routes through the same backend.",
+          "must": []
+        }
+      },
+      "Properties": {
+        "RestApiId": {
+          "Ref": "Api"
+        },
+        "ParentId": {
+          "Ref": "V1Resource"
+        },
+        "PathPart": "{proxy+}"
+      }
+    },
+    "HealthMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Invoke streaming Lambda integration while preserving JSON response contracts.",
+          "must": [
+            "Health must not read user data or invoke Bedrock."
+          ]
+        }
+      },
+      "Properties": {
+        "RestApiId": {
+          "Ref": "Api"
+        },
+        "ResourceId": {
+          "Ref": "HealthResource"
+        },
+        "HttpMethod": "GET",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2021-11-15/functions/${Backend.Arn}/response-streaming-invocations"
+          },
+          "ResponseTransferMode": "STREAM",
+          "TimeoutInMillis": 250000
+        }
+      }
+    },
+    "V1Method": {
+      "Type": "AWS::ApiGateway::Method",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Invoke streaming Lambda integration while preserving JSON response contracts.",
+          "must": [
+            "Keep Cognito authorization on all product routes."
+          ]
+        }
+      },
+      "Properties": {
+        "RestApiId": {
+          "Ref": "Api"
+        },
+        "ResourceId": {
+          "Ref": "V1Resource"
+        },
+        "HttpMethod": "ANY",
+        "AuthorizationType": "COGNITO_USER_POOLS",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2021-11-15/functions/${Backend.Arn}/response-streaming-invocations"
+          },
+          "ResponseTransferMode": "STREAM",
+          "TimeoutInMillis": 250000
+        },
+        "AuthorizerId": {
+          "Ref": "Authorizer"
+        },
+        "AuthorizationScopes": [
+          "aws.cognito.signin.user.admin"
+        ]
+      }
+    },
+    "ProxyMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Invoke streaming Lambda integration while preserving JSON response contracts.",
+          "must": [
+            "Keep Cognito authorization on all product routes."
+          ]
+        }
+      },
+      "Properties": {
+        "RestApiId": {
+          "Ref": "Api"
+        },
+        "ResourceId": {
+          "Ref": "ProxyResource"
+        },
+        "HttpMethod": "ANY",
+        "AuthorizationType": "COGNITO_USER_POOLS",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2021-11-15/functions/${Backend.Arn}/response-streaming-invocations"
+          },
+          "ResponseTransferMode": "STREAM",
+          "TimeoutInMillis": 250000
+        },
+        "AuthorizerId": {
+          "Ref": "Authorizer"
+        },
+        "AuthorizationScopes": [
+          "aws.cognito.signin.user.admin"
+        ]
+      }
+    },
+    "InvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Only this account and API can invoke the backend through API Gateway.",
+          "must": []
+        }
+      },
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "Backend"
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        },
+        "SourceArn": {
+          "Fn::Sub": "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*"
+        }
+      }
+    },
+    "Deployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Snapshot current API methods; deployment script changes logical ID when methods change.",
+          "must": []
+        }
+      },
+      "Properties": {
+        "RestApiId": {
+          "Ref": "Api"
+        }
+      },
+      "DependsOn": [
+        "HealthMethod",
+        "V1Method",
+        "ProxyMethod"
+      ]
+    },
+    "Stage": {
+      "Type": "AWS::ApiGateway::Stage",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Initial request throttling; no account-wide API logging role modification.",
+          "must": [
+            "Never enable request/response data tracing for nutrition data."
+          ]
+        }
+      },
+      "Properties": {
+        "RestApiId": {
+          "Ref": "Api"
+        },
+        "DeploymentId": {
+          "Ref": "Deployment"
+        },
+        "StageName": {
+          "Ref": "Environment"
+        },
+        "MethodSettings": [
+          {
+            "ResourcePath": "/*",
+            "HttpMethod": "*",
+            "ThrottlingBurstLimit": 10,
+            "ThrottlingRateLimit": 5.0,
+            "DataTraceEnabled": false
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ApiUrl": {
+      "Value": {
+        "Fn::Sub": "https://${Api}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${Environment}"
+      },
+      "Description": "Backend base URL"
+    },
+    "FunctionName": {
+      "Value": {
+        "Ref": "Backend"
+      },
+      "Description": "Deployed Lambda function"
+    },
+    "ExecutionRoleArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "ExecutionRole",
+          "Arn"
+        ]
+      },
+      "Description": "Scoped runtime IAM role"
+    },
+    "LogGroup": {
+      "Value": {
+        "Ref": "FunctionLogs"
+      },
+      "Description": "Backend diagnostic logs"
+    }
+  }
+}
