@@ -1,0 +1,14 @@
+.coach-markdown { overflow-wrap: anywhere; line-height: 1.6; }
+.message .coach-markdown p { white-space: normal; margin: .7rem 0; }
+.coach-markdown :is(h1,h2,h3,h4,h5,h6) { font-size: 1.05rem; letter-spacing: normal; margin: 1rem 0 .5rem; }
+.coach-markdown > :last-child { margin-bottom: 0; }
+.coach-markdown :is(ul,ol) { padding-left: 1.5rem; margin: .7rem 0; }
+.coach-markdown li + li { margin-top: .3rem; }
+.coach-markdown a { color: #215d47; text-decoration: underline; }
+.coach-markdown table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: .8rem 0; }
+.coach-markdown :is(th,td) { border: 1px solid #ccd7cd; padding: .4rem .6rem; text-align: left; }
+.coach-markdown pre { max-width: 100%; overflow-x: auto; padding: .7rem; background: #e5ebe3; border-radius: 6px; }
+.coach-markdown code { background: #e5ebe3; border-radius: 3px; padding: .1rem .25rem; }
+.coach-markdown pre code { padding: 0; }
+.coach-markdown blockquote { margin: .8rem 0; padding-left: 1rem; border-left: 3px solid #80ac96; }
+.coach-markdown input[type="checkbox"] { width: auto; }

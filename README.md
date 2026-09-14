@@ -1,7 +1,8 @@
 # ImHungry
 
-Python 3.12 nutrition backend with FastAPI, one Strands dietitian agent, Bedrock,
-DynamoDB product records and native Strands S3 conversation snapshots.
+Full-stack AI nutrition coach with a React/TypeScript frontend and a Python 3.12
+FastAPI backend in this repository. The backend uses one Strands dietitian agent,
+Bedrock, DynamoDB product records and native Strands S3 conversation snapshots.
 
 **Open the app:** https://main.d2sqqpgd3gb3c4.amplifyapp.com
 
@@ -15,7 +16,18 @@ audit, feature/service/tool/endpoint/test matrix and staged implementation plan
 are in [IMPLEMENTATION.md](IMPLEMENTATION.md). Persistence and interfaces are
 documented in [SCHEMA.md](SCHEMA.md) and [ToolsAndEndpoints.md](ToolsAndEndpoints.md).
 
-## Run locally without AWS
+## Run the frontend locally
+
+```bash
+npm ci --prefix frontend
+npm run dev --prefix frontend
+```
+
+Open http://127.0.0.1:5173. The frontend connects to the deployed backend and uses
+your Cognito account. See the [frontend guide](frontend/README.md) for configuration,
+tests and publishing commands.
+
+## Run the backend demo locally without AWS
 
 ```bash
 uv sync
