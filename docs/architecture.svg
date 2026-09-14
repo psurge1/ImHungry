@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1080" viewBox="0 0 1500 1080">
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto-start-reverse"><path d="M0 0L8 4L0 8" fill="none" stroke="#334155" stroke-width="1.5"/></marker></defs>
+<rect width="1500" height="1080" fill="white"/>
+<style>text{font-family:Arial,Helvetica,sans-serif;fill:#17212b;text-anchor:middle} .title{font-size:32px;font-weight:700}.name{font-size:22px;font-weight:700}.detail{font-size:18px;fill:#475569}.label{font-size:17px;fill:#475569}.box{fill:#fff;stroke:#334155;stroke-width:2}.edge{fill:none;stroke:#334155;stroke-width:2;marker-end:url(#arrow)}.both{marker-start:url(#arrow)}</style>
+<text class="title" x="750" y="55">ImHungry Architecture</text>
+<text class="detail" x="750" y="87">React frontend · Python backend · AWS managed services</text>
+
+<rect class="box" x="80" y="160" width="380" height="140"/>
+<text class="name" x="270" y="197">Web app in the browser</text>
+<text class="detail" x="270" y="229">React + TypeScript + Amplify Auth</text>
+<text class="detail" x="270" y="260">Static assets: AWS Amplify Hosting</text>
+
+<rect class="box" x="580" y="160" width="340" height="140"/>
+<text class="name" x="750" y="201">Amazon API Gateway</text>
+<text class="detail" x="750" y="236">Cognito authorization</text>
+<text class="detail" x="750" y="267">Exact-origin CORS</text>
+
+<rect class="box" x="1040" y="160" width="380" height="140"/>
+<text class="name" x="1230" y="210">Amazon Cognito</text>
+<text class="detail" x="1230" y="249">Accounts and access tokens</text>
+
+<path class="edge" d="M460 230H580"/>
+<text class="label" x="520" y="210">HTTPS</text>
+<path class="edge both" d="M270 160V125H1230V160"/>
+<text class="label" x="750" y="119">Sign in / access token</text>
+<text class="label" x="880" y="348">Authenticated requests</text>
+
+<rect x="80" y="390" width="1340" height="390" fill="#f8fafc" stroke="#64748b" stroke-width="2" stroke-dasharray="8 6"/>
+<path class="edge" d="M750 300V430"/>
+<text class="name" x="295" y="425">AWS Lambda · Python backend</text>
+<rect class="box" x="580" y="430" width="340" height="90"/>
+<text class="name" x="750" y="466">FastAPI</text>
+<text class="detail" x="750" y="496">Validation and orchestration</text>
+
+<rect class="box" x="170" y="610" width="460" height="120"/>
+<text class="name" x="400" y="649">Strands nutrition coach</text>
+<text class="detail" x="400" y="680">Agent loop + local tool adapters</text>
+<text class="detail" x="400" y="708">Native conversation snapshots</text>
+
+<rect class="box" x="910" y="610" width="400" height="120"/>
+<text class="name" x="1110" y="649">Shared Python services</text>
+<text class="detail" x="1110" y="680">Nutrition math and data operations</text>
+<text class="detail" x="1110" y="708">Ownership, versions, safe retries</text>
+
+<path class="edge" d="M670 520V555H400V610"/>
+<text class="label" x="490" y="546">Coach messages</text>
+<path class="edge" d="M830 520V555H1110V610"/>
+<text class="label" x="1070" y="546">Profile, logs, plans, progress</text>
+<path class="edge" d="M630 670H910"/>
+<text class="label" x="770" y="653">Validated tool calls</text>
+
+<rect class="box" x="55" y="890" width="305" height="120"/>
+<text class="name" x="207" y="929">Amazon Bedrock</text>
+<text class="detail" x="207" y="961">Nova model</text>
+<text class="detail" x="207" y="989">Reasoning and estimation</text>
+<rect class="box" x="415" y="890" width="285" height="120"/>
+<text class="name" x="557" y="929">Amazon S3</text>
+<text class="detail" x="557" y="961">Private conversation</text>
+<text class="detail" x="557" y="989">snapshots</text>
+<rect class="box" x="810" y="890" width="300" height="120"/>
+<text class="name" x="960" y="929">Amazon DynamoDB</text>
+<text class="detail" x="960" y="961">User nutrition records</text>
+<text class="detail" x="960" y="989">Conversation metadata</text>
+<rect class="box" x="1155" y="890" width="290" height="120"/>
+<text class="name" x="1300" y="929">Public menu sources</text>
+<text class="detail" x="1300" y="961">MenuMacros / Macros.Menu</text>
+<text class="detail" x="1300" y="989">Estimate if unavailable</text>
+
+<path class="edge both" d="M270 730V825H207V890"/>
+<text class="label" x="190" y="811">Model calls</text>
+<path class="edge both" d="M530 730V825H557V890"/>
+<text class="label" x="612" y="811">Load / save</text>
+<path class="edge both" d="M1020 730V825H960V890"/>
+<text class="label" x="911" y="811">Read / write</text>
+<path class="edge both" d="M1210 730V825H1300V890"/>
+<text class="label" x="1303" y="811">Menu lookup</text>
+<text class="detail" x="750" y="1052">One repository · Infrastructure managed with AWS CloudFormation</text>
+</svg>

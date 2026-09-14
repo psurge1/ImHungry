@@ -98,6 +98,10 @@ services and inspect `app.openapi()`; interactive API docs are not exposed publi
 
 ## Architecture and semantics
 
+![ImHungry architecture: React frontend, Cognito, API Gateway, Lambda, Strands, Bedrock, DynamoDB, S3 and public menu sources](docs/architecture.png)
+
+[Editable diagram (SVG)](docs/architecture.svg) · [Architecture details](ARCHITECTURE.md)
+
 FastAPI routes and 34 local `@tool(context=True)` adapters call the same
 `NutritionService`. Trusted invocation state supplies the verified Cognito subject,
 services, conversation and request identity. The model cannot choose storage keys
