@@ -6,7 +6,8 @@ from pydantic import ValidationError
 from strands import ToolContext, tool
 
 from .errors import AppError
-from .models import Intake, Strategy, StrategyCalculationRequest
+from .models import (Intake, Strategy, StrategyCalculationRequest, Recipe, SavedFood,
+                     Hydration, PlannedMeal, CheckIn, BehaviorPattern, FoodLookupRequest, FoodEstimateRequest)
 
 
 def safe_tool(function):
@@ -112,3 +113,154 @@ def get_nutrition_summary(tool_context: ToolContext, start_date: str, end_date: 
 TOOLS = [get_user_profile, update_user_profile, get_nutrition_strategy,
          calculate_nutrition_strategy, save_nutrition_strategy, log_food,
          edit_food, remove_food, get_food_log, get_nutrition_summary]
+
+
+@safe_tool
+def calculate_recipe_nutrition(tool_context: ToolContext, request: Recipe) -> dict:
+    """Preview total and per-serving nutrition from ingredient quantities. Does not save."""
+    services, _ = context(tool_context)
+    return services.calculate_recipe(request.data())
+
+
+@safe_tool
+def save_recipe(tool_context: ToolContext, recipe: Recipe) -> dict:
+    """Save a recipe when the user requests it; calculate from its ingredient nutrition."""
+    services, user = context(tool_context)
+    return services.create(user, "recipes", recipe.data(), mutation_key(tool_context))
+
+
+@safe_tool
+def save_food(tool_context: ToolContext, food: SavedFood) -> dict:
+    """Save a reusable food and serving on the user's request."""
+    services, user = context(tool_context)
+    return services.create(user, "saved-foods", food.data(), mutation_key(tool_context))
+
+
+@safe_tool
+def log_hydration(tool_context: ToolContext, entry: Hydration) -> dict:
+    """Log a drink the user reports consuming; do not infer unreported hydration."""
+    services, user = context(tool_context)
+    return services.create(user, "hydration", entry.data(), mutation_key(tool_context))
+
+
+@safe_tool
+def save_planned_meal(tool_context: ToolContext, meal: PlannedMeal) -> dict:
+    """Save a meal, restaurant choice or event plan only after the user accepts it."""
+    services, user = context(tool_context)
+    return services.create(user, "planned-meals", meal.data(), mutation_key(tool_context))
+
+
+@safe_tool
+def log_checkin(tool_context: ToolContext, checkin: CheckIn) -> dict:
+    """Save user-reported measurements or feelings; do not infer measurements or diagnoses."""
+    services, user = context(tool_context)
+    return services.create(user, "check-ins", checkin.data(), mutation_key(tool_context))
+
+
+@safe_tool
+def save_behavior_pattern(tool_context: ToolContext, pattern: BehaviorPattern) -> dict:
+    """Save a recurring problem and agreed strategies only after explicit user confirmation."""
+    services, user = context(tool_context)
+    return services.create(user, "behavior-patterns", pattern.data(), mutation_key(tool_context))
+
+
+@safe_tool
+def get_recipes(tool_context: ToolContext, query: str | None = None) -> dict:
+    """Read saved recipes, optionally matching a food or recipe name."""
+    services, user = context(tool_context)
+    return services.list(user, "recipes", query=query)
+
+
+@safe_tool
+def get_saved_and_frequent_foods(tool_context: ToolContext, query: str | None = None, lookback_days: int = 60) -> dict:
+    """Read reusable foods and frequency derived from recent actual intake."""
+    services, user = context(tool_context)
+    return {"saved_foods": services.list(user, "saved-foods", query=query)["items"], "frequent_foods": services.frequent_foods(user, query, lookback_days)}
+
+
+@safe_tool
+def get_hydration_summary(tool_context: ToolContext, start_date: str, end_date: str | None = None) -> dict:
+    """Read recorded hydration totals and applicable dated hydration targets."""
+    services, user = context(tool_context)
+    return services.hydration_summary(user, start_date, end_date)
+
+
+@safe_tool
+def get_planned_meals(tool_context: ToolContext, start_date: str, end_date: str | None = None) -> dict:
+    """Read accepted meals and social-event plans in an inclusive local date range."""
+    services, user = context(tool_context)
+    return {"items": services.records(user, "planned-meals", start_date, end_date)}
+
+
+@safe_tool
+def get_meal_decision_context(tool_context: ToolContext, local_date: str, meal_type: str | None = None) -> dict:
+    """Read preferences, allergies, dated targets, intake, hydration, saved foods and plans before suggesting meals."""
+    services, user = context(tool_context)
+    return services.meal_context(user, local_date, meal_type)
+
+
+@safe_tool
+def get_progress_context(tool_context: ToolContext, start_date: str, end_date: str) -> dict:
+    """Read weight, intake, hunger, energy and recovery trends for coaching; unlogged intake is unknown."""
+    services, user = context(tool_context)
+    return services.progress(user, start_date, end_date)
+
+
+@safe_tool
+def get_behavior_patterns(tool_context: ToolContext, status: str = "active") -> dict:
+    """Read confirmed recurring problems and strategies; active includes newly confirmed patterns."""
+    services, user = context(tool_context)
+    items = services.records(user, "behavior-patterns")
+    return {"items": [p for p in items if p["status"] == status or (status == "active" and p["status"] == "confirmed")]}
+
+
+@safe_tool
+def lookup_food_nutrition(tool_context: ToolContext, request: FoodLookupRequest) -> dict:
+    """Search configured documented nutrition values without logging food. May report provider unavailable."""
+    services, user = context(tool_context)
+    return services.lookup_food(user, request.data())
+
+
+@safe_tool
+def estimate_food_nutrition(tool_context: ToolContext, request: FoodEstimateRequest) -> dict:
+    """Estimate nutrition with ranges and assumptions when documented lookup is unavailable. Does not log food."""
+    services, user = context(tool_context)
+    return services.estimate_food(user, request.data())
+
+
+@safe_tool
+def lookup_restaurant_menu(tool_context: ToolContext, restaurant_name: str, location: str | None = None, query: str | None = None) -> dict:
+    """Look up a known restaurant's documented menu; this does not discover restaurants."""
+    services, user = context(tool_context)
+    return services.restaurant_menu(user, restaurant_name, location, query)
+
+
+def update_adapter(name, kind):
+    def update(tool_context: ToolContext, entry_ref: str, patch: dict, expected_version: int) -> dict:
+        services, user = context(tool_context)
+        return services.update(user, kind, entry_ref, patch, expected_version, mutation_key(tool_context))
+    update.__name__ = name
+    update.__doc__ = f"Update a selected {kind} record only on clear user intent. Use its entry_ref and current version."
+    return safe_tool(update)
+
+
+def delete_adapter(name, kind):
+    def delete(tool_context: ToolContext, entry_ref: str, expected_version: int) -> dict:
+        services, user = context(tool_context)
+        return services.delete(user, kind, entry_ref, expected_version, mutation_key(tool_context))
+    delete.__name__ = name
+    delete.__doc__ = f"Delete a selected {kind} record only when the user explicitly requests removal."
+    return safe_tool(delete)
+
+
+TOOLS += [calculate_recipe_nutrition, save_recipe, save_food, log_hydration,
+          save_planned_meal, log_checkin, save_behavior_pattern, get_recipes,
+          get_saved_and_frequent_foods, get_hydration_summary, get_planned_meals,
+          get_meal_decision_context, get_progress_context, get_behavior_patterns,
+          lookup_food_nutrition, estimate_food_nutrition, lookup_restaurant_menu]
+TOOLS += [update_adapter(name, kind) for name, kind in [
+    ("update_recipe", "recipes"), ("edit_hydration", "hydration"),
+    ("update_planned_meal", "planned-meals"), ("update_checkin", "check-ins"),
+    ("update_behavior_pattern", "behavior-patterns")]]
+TOOLS += [delete_adapter(name, kind) for name, kind in [
+    ("remove_hydration", "hydration"), ("remove_planned_meal", "planned-meals")]]

@@ -320,6 +320,44 @@ class DateRange(Model):
         return self
 
 
+class FoodLookupRequest(Model):
+    query: Annotated[str, Field(min_length=1, max_length=200)]
+    brand: Text | None = None
+    restaurant: Text | None = None
+    serving: Text | None = None
+
+
+class FoodEstimateRequest(Model):
+    description: Text
+    quantity: Positive
+    unit: Text
+    known_nutrition: dict[str, Number] = Field(default_factory=dict)
+
+    @field_validator("known_nutrition")
+    @classmethod
+    def known_fields(cls, value):
+        if not set(value) <= set(Nutrition.model_fields):
+            raise ValueError("Unknown nutrition field")
+        return value
+
+
+class NutritionResult(Model):
+    food: Food
+    nutrition: Nutrition
+    source: Source
+    estimate: Estimate | None = None
+
+    @model_validator(mode="after")
+    def valid_estimate(self):
+        Intake(consumed_at=datetime.now(timezone.utc), food=self.food, nutrition=self.nutrition,
+               source=self.source, estimate=self.estimate)
+        return self
+
+
+class EstimatedNutrition(NutritionResult):
+    estimate: Estimate
+
+
 RECORDS = {
     "profile": ("PROFILE", Profile, "user_profile", None),
     "nutrition-strategies": ("NUTRITION_STRATEGY", Strategy, "nutrition_strategy", None),

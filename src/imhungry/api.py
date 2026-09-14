@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from .auth import deny_authentication
 from .errors import AppError
-from .models import RECORDS, Strategy, StrategyCalculationRequest
+from .models import RECORDS, Strategy, StrategyCalculationRequest, Recipe, FoodEstimateRequest
 
 
 def create_app(services, *, verifier=deny_authentication, conversations=None):
@@ -121,5 +121,34 @@ def create_app(services, *, verifier=deny_authentication, conversations=None):
                 ("GET", "/{reference}", get, 200), ("PATCH", "/{reference}", patch, 200), ("DELETE", "/{reference}", delete, 200)]:
             app.add_api_route(path + suffix, endpoint, methods=[method], status_code=status_code, name=f"{method}_{kind}")
 
-    resource_routes("food-log")
+    @app.post("/v1/recipes/calculate")
+    def recipe_calculation(request: Recipe, user=Depends(identity)):
+        return services.calculate_recipe(request.data())
+
+    @app.get("/v1/hydration-summary")
+    def hydration_summary(start_date: date, end_date: date | None = None, user=Depends(identity)):
+        return services.hydration_summary(user, start_date, end_date)
+
+    @app.get("/v1/progress-summary")
+    def progress_summary(start_date: date, end_date: date, user=Depends(identity)):
+        return services.progress(user, start_date, end_date)
+
+    @app.get("/v1/foods/frequent")
+    def frequent(query: str | None = None, lookback_days: int = Query(60, ge=1, le=366), user=Depends(identity)):
+        return {"items": services.frequent_foods(user, query, lookback_days)}
+
+    @app.get("/v1/foods/search")
+    def search(query: str, brand: str | None = None, restaurant: str | None = None, serving: str | None = None, user=Depends(identity)):
+        return services.lookup_food(user, {"query": query, "brand": brand, "restaurant": restaurant, "serving": serving})
+
+    @app.post("/v1/foods/estimate")
+    def estimate(request: FoodEstimateRequest, user=Depends(identity)):
+        return services.estimate_food(user, request.data())
+
+    @app.get("/v1/restaurant-menus/search")
+    def menu(restaurant_name: str, location: str | None = None, query: str | None = None, user=Depends(identity)):
+        return services.restaurant_menu(user, restaurant_name, location, query)
+
+    for kind in ("food-log", "recipes", "saved-foods", "hydration", "planned-meals", "check-ins", "behavior-patterns"):
+        resource_routes(kind)
     return app

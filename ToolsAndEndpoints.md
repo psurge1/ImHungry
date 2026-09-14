@@ -70,6 +70,18 @@ Every model-provided argument remains untrusted and is validated by Pydantic and
 
 ## Shared Domain Models
 
+Implementation conventions: resource update tools use `entry_ref` consistently,
+including recipes and patterns whose reference equals their UUID. Profile updates
+also accept `expected_version`. Patches merge nested maps and then validate the
+complete shared domain model. Recipe previews accept the same name/yield/ingredients
+input as saved recipes. Tools never accept raw storage keys.
+
+Planned-meal consumption links reference already logged intake on that meal's
+local date. Completing a plan without linked entries records status only; the
+agent logs consumption explicitly when reported. Lists use offset cursors bound
+to the user and query; concurrent collection changes can shift pages. They query
+all matching records initially, a deliberate modest-user-history tradeoff.
+
 The signatures below refer to these Pydantic model families. Their fields correspond to the records already defined in `SCHEMA.md`.
 
 | Model | Purpose |

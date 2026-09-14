@@ -118,3 +118,8 @@ Updated as stages complete. This milestone ends after Stage 4 verification.
 - Stage 2: profile/strategy/food services, FastAPI and trusted-context tools;
   Cognito verification is tested with ephemeral local signing keys. Local tests
   cover identity, replay, validation, timezone corrections and historical targets.
+- Stage 2 committed and pushed as a72dc0d; full suite: 35 passed.
+- Stage 3 adds all remaining canonical resource adapters and nutrition context.
+  Estimation uses Strands BedrockModel.structured_output directly, without a second
+  agent. External database/menu implementations remain unconfigured contracts.
+  Period target aggregation uses two bounded timeline queries, not one per day.

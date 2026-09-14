@@ -9,7 +9,8 @@ from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from .errors import AppError, Conflict, NotFound
-from .models import RECORDS, DateRange, Nutrition, StrategyCalculationRequest
+from .models import (RECORDS, DateRange, Nutrition, StrategyCalculationRequest,
+                     Recipe, FoodLookupRequest, FoodEstimateRequest, NutritionResult, EstimatedNutrition)
 from .repository import Repository, Write, partition
 
 
@@ -171,6 +172,21 @@ class NutritionService:
             food["food_fingerprint"] = digest([food["normalized_name"], food["unit"].casefold()])
         if kind == "conversations":
             item.update(GSI1PK=partition(user), GSI1SK=now + "#" + ident)
+        if kind == "recipes":
+            item.update(self.calculate_recipe(data))
+        if kind in {"planned-meals", "behavior-patterns"} and data.get("source_conversation_id"):
+            self.get(user, "conversations", data["source_conversation_id"])
+        if kind == "planned-meals":
+            for meal_item in data["items"]:
+                if meal_item.get("recipe_id"):
+                    self.get(user, "recipes", meal_item["recipe_id"])
+                if meal_item.get("saved_food_id"):
+                    self.get(user, "saved-foods", meal_item["saved_food_id"])
+            if data["completed_intake_entry_ids"]:
+                # Link existing logged consumption; a status change never invents intake.
+                known = {i["entry_id"] for i in self.records(user, "food-log", item["local_date"])}
+                if not set(data["completed_intake_entry_ids"]) <= known:
+                    raise NotFound()
         return key, item
 
     def create(self, user, kind, payload, request_id):
@@ -301,12 +317,13 @@ class NutritionService:
     def summary(self, user, start_date, end_date=None):
         span = DateRange(start_date=start_date, end_date=end_date)
         entries = self.records(user, "food-log", span.start_date, span.end_date)
+        strategies = self._daily_strategies(user, span)
         days = []
         for offset in range((span.end_date - span.start_date).days + 1):
             day = span.start_date + timedelta(days=offset)
             foods = [e for e in entries if e["local_date"] == day.isoformat()]
             total = total_nutrition([e["nutrition"] for e in foods])
-            strategy = self.current_strategy(user, day)
+            strategy = strategies[str(day)]
             targets = strategy["targets"] if strategy else None
             days.append({"local_date": str(day), "totals": total, "entry_count": len(foods), "has_logged_intake": bool(foods),
                          "targets": targets, "remaining": {k: round(v - total[k], 4) for k, v in targets.items() if k in total} if targets else None})
@@ -314,3 +331,124 @@ class NutritionService:
         return {"days": days, "totals": total, "averages_per_calendar_day": {k: round(v / len(days), 4) for k, v in total.items()},
                 "logged_days": sum(d["has_logged_intake"] for d in days),
                 "note": "Totals describe logged intake only; an unlogged day does not imply zero consumption."}
+
+    def calculate_recipe(self, request):
+        recipe = Recipe.model_validate(request)
+        totals = total_nutrition([i.nutrition_for_quantity.data() for i in recipe.ingredients])
+        return {"nutrition_total": totals,
+                "nutrition_per_serving": {key: round(value / recipe.recipe_yield.servings, 4) for key, value in totals.items()},
+                "calculation_version": 1}
+
+    def frequent_foods(self, user, query=None, lookback_days=60):
+        if type(lookback_days) is not int or not 1 <= lookback_days <= 366:
+            raise AppError("validation", "Lookback must be 1 to 366 days")
+        today = self.today(user)
+        foods = self.records(user, "food-log", today - timedelta(days=lookback_days - 1), today)
+        groups = {}
+        for entry in foods:
+            food = entry["food"]
+            if query and query.casefold() not in food["display_name"].casefold():
+                continue
+            fingerprint = food["food_fingerprint"]
+            group = groups.setdefault(fingerprint, {"food": food, "count": 0})
+            group["count"] += 1
+            group["latest_entry"] = entry
+        return sorted(groups.values(), key=lambda item: (-item["count"], item["food"]["normalized_name"]))[:100]
+
+    def hydration_summary(self, user, start_date, end_date=None):
+        span = DateRange(start_date=start_date, end_date=end_date)
+        entries = self.records(user, "hydration", span.start_date, span.end_date)
+        strategies = self._daily_strategies(user, span)
+        days = []
+        for offset in range((span.end_date - span.start_date).days + 1):
+            day = span.start_date + timedelta(days=offset)
+            amount = sum(e["amount_ml"] for e in entries if e["local_date"] == str(day))
+            strategy = strategies[str(day)]
+            target = strategy["targets"].get("hydration_ml") if strategy else None
+            days.append({"local_date": str(day), "amount_ml": amount, "target_ml": target,
+                         "remaining_ml": target - amount if target is not None else None})
+        total = sum(e["amount_ml"] for e in entries)
+        return {"days": days, "total_ml": total, "average_ml_per_calendar_day": total / len(days)}
+
+    def _daily_strategies(self, user, span):
+        """Two bounded queries per period, rather than one query per day."""
+        zone = self.zone(user)
+        lower = "NUTRITION_STRATEGY#" + utc(datetime.combine(span.start_date, time.min, zone))
+        upper = "NUTRITION_STRATEGY#" + utc(datetime.combine(span.end_date, time.max, zone))
+        baseline = self.repo.query(user, "NUTRITION_STRATEGY#", lower, reverse=True, limit=1)
+        revisions = baseline + self.repo.query(user, lower, upper)
+        result = {}
+        for offset in range((span.end_date - span.start_date).days + 1):
+            day = span.start_date + timedelta(days=offset)
+            instant = self.clock() if day == self.today(user) else datetime.combine(day, time.max, zone)
+            applicable = [revision for revision in revisions if revision["effective_from"] <= utc(instant)]
+            result[str(day)] = self.public(applicable[-1]) if applicable else None
+        return result
+
+    def meal_context(self, user, local_date, meal_type=None):
+        summary = self.summary(user, local_date)
+        planned = self.records(user, "planned-meals", local_date)
+        if meal_type:
+            planned = [m for m in planned if m["meal_slot"] == meal_type]
+        return {"profile": self.get(user, "profile"), "strategy": self.current_strategy(user, local_date),
+                "intake": self.records(user, "food-log", local_date), "nutrition": summary,
+                "hydration": self.hydration_summary(user, local_date), "planned_meals": planned,
+                "recipes": self.records(user, "recipes")[:50], "saved_foods": self.records(user, "saved-foods")[:50],
+                "frequent_foods": self.frequent_foods(user)[:20]}
+
+    def progress(self, user, start_date, end_date):
+        span = DateRange(start_date=start_date, end_date=end_date)
+        checkins = self.records(user, "check-ins", span.start_date, span.end_date)
+        summary = self.summary(user, span.start_date, span.end_date)
+        weights = [{"local_date": c["local_date"], "weight_kg": c["measurements"]["weight_kg"]} for c in checkins if "weight_kg" in c["measurements"]]
+        measurements = {}
+        for field in ("weight_kg", "body_fat_percent", "waist_cm"):
+            points = [{"local_date": c["local_date"], "value": c["measurements"][field],
+                       **({"source": c["measurements"]["body_fat_source"]} if field == "body_fat_percent" else {})}
+                      for c in checkins if field in c["measurements"]]
+            measurements[field] = {"points": points, "change": round(points[-1]["value"] - points[0]["value"], 4) if len(points) > 1 else None}
+        subjective = {}
+        for field in ("hunger", "energy", "recovery", "food_fixation"):
+            values = [c["subjective"][field] for c in checkins if field in c["subjective"]]
+            subjective[field] = {"count": len(values), "average": round(sum(values) / len(values), 2) if values else None,
+                                 "change": values[-1] - values[0] if len(values) > 1 else None}
+        adherence = {"below": 0, "within": 0, "above": 0, "unknown": 0}
+        for day in summary["days"]:
+            target = day["targets"].get("energy_kcal") if day["targets"] else None
+            if not day["has_logged_intake"] or not target:
+                adherence["unknown"] += 1
+            else:
+                ratio = day["totals"]["energy_kcal"] / target
+                adherence["below" if ratio < .9 else "above" if ratio > 1.1 else "within"] += 1
+        return {"profile": self.get(user, "profile"), "checkins": checkins, "latest_weight": weights[-1] if weights else None,
+                "measurements": measurements, "subjective_trends": subjective, "nutrition": summary,
+                "adherence": {"distribution": adherence, "tolerance_fraction": .1, "note": "Based only on reported intake; logging completeness is unknown."},
+                "hydration": self.hydration_summary(user, span.start_date, span.end_date),
+                "strategy_at_start": self.current_strategy(user, span.start_date),
+                "strategy_history": self.records(user, "nutrition-strategies", span.start_date, span.end_date),
+                "behavior_patterns": [p for p in self.records(user, "behavior-patterns") if p["status"] in {"confirmed", "active"}]}
+
+    def lookup_food(self, user, request):
+        req = FoodLookupRequest.model_validate(request)
+        if not self.provider:
+            raise AppError("provider_unavailable", "Nutrition lookup provider is not configured", 503)
+        return {"items": [NutritionResult.model_validate(item).data() for item in self.provider.search(req)]}
+
+    def estimate_food(self, user, request):
+        req = FoodEstimateRequest.model_validate(request)
+        if not self.provider:
+            raise AppError("provider_unavailable", "Nutrition estimation provider is not configured", 503)
+        result = EstimatedNutrition.model_validate(self.provider.estimate(req))
+        if result.source.type != "model_estimate":
+            raise AppError("provider_result", "Estimation must identify model provenance", 503)
+        for field, known in req.known_nutrition.items():
+            if getattr(result.nutrition, field) != known:
+                raise AppError("provider_result", "Estimate changed supplied nutrition values", 503)
+        return result.data()
+
+    def restaurant_menu(self, user, restaurant_name, location=None, query=None):
+        if not restaurant_name or len(restaurant_name) > 200:
+            raise AppError("validation", "Provide a restaurant name up to 200 characters")
+        if not self.provider:
+            raise AppError("provider_unavailable", "Restaurant menu provider is not configured", 503)
+        return {"items": [NutritionResult.model_validate(item).data() for item in self.provider.menu(restaurant_name, location, query)]}
