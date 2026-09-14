@@ -109,3 +109,8 @@ final diff/secret-path review, commit and push to origin/main. No live AWS tests
 ## Checkpoints
 
 Updated as stages complete. This milestone ends after Stage 4 verification.
+
+- Stage 0: baseline 9 tests passed; documentation committed and pushed as 2ff3b6a.
+- Stage 1: domain validation and both repository adapters tested locally,
+  including atomic conflicts/moves, sparse index, all-page reads, and isolation.
+  Runtime dependencies are locked; Moto is a development-only AWS emulator.
