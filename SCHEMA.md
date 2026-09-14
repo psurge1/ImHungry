@@ -2,7 +2,7 @@
 
 ## Status and Scope
 
-This document defines the target persistent data formats for the four product feature groups in `FEATURES.md`. It is a design document; the current Milestone 1 implementation still uses local, in-memory tool data.
+This document defines the persistent data formats for the four product feature groups in `FEATURES.md`. Implementation progress and verification are recorded in IMPLEMENTATION.md.
 
 The S3 schema below restates the previously approved decision without changing it. The DynamoDB schema is derived from the complete feature list and replaces the preliminary DynamoDB proposal in `ARCHITECTURE.md` when the two disagree.
 
@@ -620,6 +620,26 @@ The initial schema does not store the following as canonical records:
 Each value can be recomputed from canonical records, preventing stale duplicated data. If measurements later show that repeated aggregation is too expensive, date-keyed summary or food-frequency items may be introduced as explicitly derived caches and rebuilt from source records.
 
 ## Consistency and Mutation Rules
+
+Operational `REQUEST#<sha256(operation-and-idempotency-key)>` items share the
+authenticated user's partition. They carry a payload digest and completed result
+and are written atomically with product mutations. They are implementation
+metadata, not another feature group. Reusing a key with a different payload
+returns a conflict. Receipts are retained until a retention policy is chosen.
+
+Conversation metadata may include `invocation_id` and `invocation_status`.
+Conditional updates acquire exclusive invocation ownership. Failed/abandoned
+invocations remain blocked pending operator reconciliation; automatic expiry
+cannot safely fence a delayed S3 writer. S3 and DynamoDB commits are not atomic.
+Successful message receipts preserve replay results; tools derive stable retry
+keys from the trusted request and tool invocation identity.
+
+Historical daily targets use local end-of-day, while today's uses the current
+instant. Date ranges are inclusive and limited to 366 days. Existing record dates
+do not move merely because a profile timezone changes. Explicit date corrections
+move the record atomically and return a new locator with the same entry ID.
+Profile creation uses expected version zero. Strategy effective timestamps use
+fixed UTC microsecond precision and duplicate timestamps conflict.
 
 - Nutrition strategy revisions are append-only. A correction creates a new effective revision.
 - Food, hydration, recipes, planned meals, check-ins, patterns, profiles, and conversation metadata are mutable through conditional version checks.

@@ -2,7 +2,7 @@
 
 ## Status
 
-This document describes the agreed target backend architecture beyond Milestone 1. The current implementation is still a local CLI with mocked, in-memory data; persistence, authentication, and the HTTP API have not been implemented yet.
+This document defines backend boundaries. SCHEMA.md is authoritative for persistence and ToolsAndEndpoints.md for interfaces. IMPLEMENTATION.md records staged delivery.
 
 ## Overview
 
@@ -124,19 +124,20 @@ Conversation ownership does not come from the S3 key. Before opening a snapshot,
 
 The application uses one table per environment, named conceptually `imhungry-<environment>`, with string partition key `PK` and string sort key `SK`. Every user-owned item has `PK = USER#<cognito-sub>`. Timestamps are ISO 8601 UTC strings, `local_date` is `YYYY-MM-DD` in the user's saved time zone, IDs are server-generated UUIDs, and nutrition values are DynamoDB numbers (represented as `Decimal` in Python rather than binary floats).
 
-All items include `entity_type`, `schema_version`, `created_at`, and `updated_at` in addition to their entity-specific attributes.
+All items include `record_type`, `schema_version`, and `created_at`. Mutable items also have `updated_at` and `version`.
 
 | Entity | Sort key | Principal attributes |
 | --- | --- | --- |
-| User profile | `PROFILE` | `height_cm`, `starting_weight_kg`, `goal_weight_kg`, `activity_level`, `dietary_preferences`, `allergies`, `timezone`, `presentation_mode` |
-| Current diet plan | `PLAN#CURRENT` | `plan_id`, calorie and macro targets, calculated BMR/TDEE, calculation method and inputs, `effective_at` |
-| Diet-plan revision | `PLAN_REVISION#<effective-at>#<plan-id>` | Immutable copy of the targets and calculation context used for that revision |
-| Food-log entry | `FOOD#<local-date>#<logged-at>#<entry-id>` | `food_name`, serving description, meal type, calories/macros, source, optional estimate confidence and assumptions |
+| User profile | `PROFILE` | Physical calculation inputs, preferences, restrictions, allergies, activity context, timezone and presentation preference |
+| Nutrition strategy | `NUTRITION_STRATEGY#<effective-from-UTC>` | Append-only goals, baseline and goal weights, targets and calculation context; no plan ID |
+| Food-log entry | `INTAKE#<local-date>#<consumed-at-UTC>#<entry-id>` | Food, serving, consumed nutrition, provenance and estimate uncertainty |
 | Recipe | `RECIPE#<recipe-id>` | `name`, `servings`, ingredients, total nutrition, per-serving nutrition |
 | Saved food | `SAVED_FOOD#<food-id>` | `name`, serving description, reusable calories/macros, source |
-| Hydration entry | `HYDRATION#<local-date>#<logged-at>#<entry-id>` | `amount_ml`, `logged_at`, `local_date` |
-| Progress check-in | `CHECKIN#<recorded-at>#<checkin-id>` | Optional weight, hunger, energy, recovery, body-image notes, and general notes |
-| Conversation metadata | `CONVERSATION#<conversation-id>` | `title`, `s3_session_id`, `status`, timestamps, `revision`, and optional short-lived invocation-lock fields |
+| Hydration entry | `HYDRATION#<local-date>#<consumed-at-UTC>#<entry-id>` | Amount, beverage, occurrence time |
+| Planned meal | `PLANNED_MEAL#<local-date>#<meal-slot>#<entry-id>` | Accepted choices, alternatives, social/restaurant context and status |
+| Progress check-in | `CHECKIN#<local-date>#<recorded-at-UTC>#<entry-id>` | Optional measurements, subjective ratings, cravings and body-image notes |
+| Behavior pattern | `BEHAVIOR_PATTERN#<pattern-id>` | Confirmed recurring situations and agreed strategies |
+| Conversation metadata | `CONVERSATION#<conversation-id>` | Ownership, title, status, version, timestamps and invocation coordination |
 
 Recipes embed their ingredient list because a recipe is retrieved as one unit and expected recipes are far below DynamoDB's 400 KB item limit. If that assumption stops being true, ingredients can become separate items without changing the public service boundary. Current weight is obtained from the latest check-in; it is not duplicated as an independently editable profile field.
 
@@ -151,13 +152,14 @@ Because `GSI1PK` and `GSI1SK` are absent from all other item types, this is a sp
 
 | Access pattern | DynamoDB operation |
 | --- | --- |
-| Get profile or current plan | `GetItem` with the exact `PK` and `SK` |
-| Get one day's food log | `Query` the user partition with `begins_with(SK, "FOOD#<local-date>#")` |
-| Get food logs over a date range | `Query` the user partition with an `SK` range from the first through the last `FOOD#<local-date>` prefix |
+| Get profile | Exact `GetItem` |
+| Get applicable strategy | Reverse bounded `Query` of `NUTRITION_STRATEGY#` through the requested instant, limit one |
+| Get one day's food log | Query the `INTAKE#<local-date>#` prefix |
+| Get food logs over a date range | Bounded query over dated `INTAKE#` keys |
 | Calculate daily or period averages | Query food entries for the range, then aggregate calories/macros in Python |
 | Get recipe, saved food, or conversation | `GetItem` by its exact key |
 | List recipes or saved foods | `Query` with the corresponding sort-key prefix |
-| Get recent check-ins or latest weight | `Query` the `CHECKIN#` range in descending order, with a limit for the latest item |
+| Get recent check-ins or latest weight | Query dated check-ins; skip entries without weight when finding latest weight |
 | List conversations by recency | Query `GSI1` in descending order |
 
 Daily summary items are not stored initially because they would duplicate food-log data and create a consistency obligation. The service calculates summaries from the user's date-keyed entries; a derived `DAILY_SUMMARY#<local-date>` cache can be introduced later only if measurements show that repeated aggregation is too expensive. A conditional update on the conversation metadata item acquires a short-lived invocation lock so two requests cannot update the same S3 snapshot concurrently.
@@ -205,7 +207,7 @@ Explicit tracking and low-obsession mode will use the same stored nutrition data
 ## Decisions Still Open
 
 - The compute environment that will host FastAPI, such as Lambda or a container service
-- Whether conversational responses will initially be synchronous or streamed
+- Initial conversational responses are synchronous HTTP results
 - Cognito managed login versus a custom login interface
-- Exact HTTP request and response contracts
+- HTTP contracts are defined in ToolsAndEndpoints.md
 - The external nutrition-data source used alongside food estimation
