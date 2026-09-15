@@ -72,6 +72,36 @@ No provisioning, IAM, infrastructure deployment or credential changes in this cy
   cases are regression-tested. Production auth and real model quality were not
   exercised. Pending requests remain in memory only; reloading/signing out or
   replacing a form discards them. Reconcile existing entries before resubmitting.
+  Commit `c58837f` pushed to origin/main.
+- Stage 3: documentation corrected and final checks repeated: Python 93 passed,
+  frontend 20 passed, TypeScript/build and offline scripted CLI passed, diff clean.
+  Existing AnyIO deprecation and frontend bundle warnings remain. No further
+  product changes or new milestone; no AWS verification/deployment this cycle.
+
+### Final coverage and boundaries
+
+| FEATURES.md group | Review evidence | Remaining limit |
+| --- | --- | --- |
+| Diet Setup | Profile clear/persistence tests; US inputs; target invalidation and acceptance in browser; deterministic calculation tests | Adult estimates and live coaching quality still need product review |
+| Food Tracking and Calculation | Food replacement/totals and hydration in browser; CRUD/isolation, recipe arithmetic, saved/frequent foods, estimates and timezone tests | General food database remains unconfigured; live estimation not exercised |
+| Meal Planning and Food Decisions | Future plans visible; plan lifecycle/context and menu fallback tests; actual scripted Strands tool loop | Live recommendations/public menu freshness unverified; discovery stays a stretch goal |
+| Adaptive Diet Coaching | Historical/new check-ins visible; progress/pattern confirmation tests; conversation retry and native snapshot tests | Broader model quality and low-obsession presentation deferred; blocked turns need operator recovery |
+
+FastAPI and Strands still share services. Verified Cognito identity, user partitions,
+opaque locators, conditional writes and native S3 snapshot format are unchanged.
+No schema, IAM, credential, dependency or deployment changes were needed.
+
+Documentation corrections: current test commands/counts, local API origin setup,
+retry/reset behavior, history windows, deployment-vs-Git distinction, outdated
+"no frontend" text and observability claims. The existing feature/service matrix
+below remains the detailed coverage reference. Unrelated BLOG_POST.md and
+skills-lock.json remain untracked and untouched.
+
+Local commands: `npm run dev --prefix frontend` serves the normal frontend on
+127.0.0.1:5173 against the deployed API; `uv run imhungry --demo` runs offline.
+The production HTTP command in README requires its four AWS/Cognito settings
+and existing authorized access. No new AWS resources or setup are required by
+these fixes. This cycle does not establish current production health.
 
 
 ## Audit (2026-09-14)

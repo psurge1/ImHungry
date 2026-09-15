@@ -31,7 +31,7 @@ The client signs in through Amazon Cognito and sends its JWT with each request. 
 ## Component Responsibilities
 
 - **Amazon Cognito user pool:** Stores login identities and credentials and issues JWTs. Product users do not receive AWS credentials.
-- **API Gateway:** Provides the managed HTTP entry point, validates Cognito JWTs, and supplies routing, CORS, throttling, and request logging.
+- **API Gateway:** Provides the managed HTTP entry point, validates Cognito JWTs, and supplies routing, CORS and throttling. The deployed template disables HTTP access logs and payload tracing; diagnostic Lambda logs and basic metrics remain available.
 - **FastAPI backend:** Owns request validation, authorization, application orchestration, and response models. All backend core logic is Python.
 - **Strands agent:** Runs the conversational agent loop and lets the Bedrock model decide whether to call an available tool or return a response.
 - **Amazon Bedrock Nova:** Performs language understanding, tool selection, nutrition estimation where appropriate, recommendations, and coaching responses.

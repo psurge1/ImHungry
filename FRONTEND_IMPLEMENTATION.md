@@ -13,8 +13,14 @@ Keep the interface small; the existing backend owns nutrition logic and persiste
 
 Live app: https://main.d2sqqpgd3gb3c4.amplifyapp.com
 
-Verification: six frontend tests, 82 backend tests, TypeScript/production build,
+Initial deployment verification: six frontend tests, 82 backend tests, TypeScript/production build,
 dependency audit, hosted sign-in/sign-up/password-recovery screens, live allowed
 preflight and gateway error headers, and rejected untrusted origins. Signed-in
 profile and message workflows are covered with mocked component/API tests; a real
 email-verified user conversation remains a manual check.
+
+Review on 2026-09-15: 20 frontend tests, 93 backend tests and TypeScript/build pass.
+Fixed history ranges, stable retries across tabs, profile clearing, stale target
+previews, food replacement metadata and profile-timezone backdating. Local browser
+checks used disposable data and a scripted coach; no AWS deployment was performed.
+Details and the issue ledger are in [IMPLEMENTATION.md](IMPLEMENTATION.md).

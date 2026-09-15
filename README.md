@@ -68,13 +68,15 @@ against those resources, configure these non-secret environment settings:
 | `AWS_REGION` | AWS region, default `us-west-2` |
 | `STRANDS_MODEL_ID` | Default `global.amazon.nova-2-lite-v1:0` |
 | `STRANDS_MAX_TOKENS` | Per-model-call output cap, default 3000 |
+| `IMHUNGRY_CORS_ORIGINS` | Comma-separated browser origins; for local Vite use `http://127.0.0.1:5173` |
 
 ```bash
 uv run uvicorn imhungry.runtime:app_factory --factory --host 127.0.0.1 --port 8000
 ```
 
 Startup fails if required settings are absent. `/health` is unauthenticated and
-does not invoke a model. Every `/v1` route requires a Cognito access token in the
+does not invoke a model. Browser OPTIONS preflight is public; product requests
+on every `/v1` route require a Cognito access token in the
 Authorization Bearer header. Verification checks RS256 signature, issuer,
 expiry, issue time, token purpose, app client and UUID subject. The server never
 trusts a user ID header or body field. Sign-in remains a Cognito/client concern;
@@ -139,12 +141,18 @@ agent state. The current trusted prompt/date is refreshed after restoration.
 ## Testing
 
 ```bash
-UV_CACHE_DIR=/tmp/imhungry-uv-cache uv run pytest -q tests/test_repository.py tests/test_services.py
-UV_CACHE_DIR=/tmp/imhungry-uv-cache uv run pytest -q tests/test_api.py tests/test_features.py
-UV_CACHE_DIR=/tmp/imhungry-uv-cache uv run pytest -q tests/test_tool_contracts.py tests/test_conversations.py
 UV_CACHE_DIR=/tmp/imhungry-uv-cache uv run pytest -q
+npm test --prefix frontend
+npm run build --prefix frontend
 git diff --check
 ```
+
+The build includes TypeScript checking; no separate lint command is configured.
+The 2026-09-15 review passed 93 backend and 20 frontend tests. Frontend tests cover
+API/auth handling, Markdown rendering, US units, date ranges, profile clearing,
+food replacement and stable retries. See [review results](IMPLEMENTATION.md) for
+local browser checks and remaining verification limits. These changes require an
+explicit publication to reach AWS; a Git push alone does not deploy them.
 
 Tests use Moto for DynamoDB/S3, local public-key verification fixtures and injected
 model responses. They do not call real AWS. Conversation tests execute the actual

@@ -670,7 +670,7 @@ fixed UTC microsecond precision and duplicate timestamps conflict.
 - Only the backend IAM role can access the table and S3 bucket.
 - The S3 bucket remains private, blocks public access, and uses encryption in transit and at rest.
 - DynamoDB encryption and least-privilege IAM apply to canonical user data.
-- When these resources are provisioned, enable S3 access logging, relevant CloudTrail data events, and CloudWatch metrics; retain only the observability data that justifies its additional storage and event-recording cost.
+- Operational follow-up: evaluate S3 access logging and relevant CloudTrail data events with appropriate retention. The current templates do not provision these; they configure 14-day backend diagnostic logs and leave basic service metrics available. HTTP access logs and payload tracing are disabled. No additional observability resources were provisioned during the review.
 - Body-image information is user-provided text only. No image-based body analysis is represented or planned.
 - Sensitive profile and health-adjacent fields should not be included in application logs.
 
