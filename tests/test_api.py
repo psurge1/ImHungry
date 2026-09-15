@@ -52,6 +52,17 @@ def test_profile_and_error_shapes(client):
     assert client.get("/v1/nutrition-summary?start_date=bad", headers=headers).status_code == 422
 
 
+@pytest.mark.parametrize("locator", [[12, "2026-09-15", "bad"], [None, "2026-09-15", "bad"],
+                                    {"a": 1, "b": 2, "c": 3}, ["x"], ["x", 12, []]])
+def test_malformed_locators_are_validation_errors(locator):
+    from imhungry.services import encode
+    client = TestClient(create_app(NutritionService(MemoryRepository()), verifier=lambda t: t),
+                        raise_server_exceptions=False)
+    response = client.get("/v1/food-log/" + encode(locator), headers={"Authorization": "Bearer alice"})
+    assert response.status_code == 422
+    assert response.json()["code"] == "validation"
+
+
 def test_cognito_verifies_signature_and_claims():
     private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     other = rsa.generate_private_key(public_exponent=65537, key_size=2048)

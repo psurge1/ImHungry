@@ -109,7 +109,10 @@ class NutritionService:
             return prefix + "#" + utc(reference)
         try:
             if timestamp:
-                ident, day, slot = decode(reference)
+                locator = decode(reference)
+                if not isinstance(locator, list) or len(locator) != 3 or not all(isinstance(v, str) for v in locator):
+                    raise ValueError()
+                ident, day, slot = locator
                 UUID(ident)
                 date.fromisoformat(day)
                 if kind == "planned-meals":

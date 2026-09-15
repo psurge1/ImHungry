@@ -18,18 +18,17 @@ from .providers import run_async
 
 def create_app(services, *, verifier=deny_authentication, conversations=None, cors_origins=()):
     app = FastAPI(title="ImHungry", docs_url=None, redoc_url=None, openapi_url=None)
-    if cors_origins:
-        app.add_middleware(CORSMiddleware, allow_origins=list(cors_origins),
-                           allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-                           allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "If-Match"],
-                           expose_headers=["X-Request-ID"], max_age=600)
     app.state.services = services
     app.state.conversations = conversations
 
     @app.middleware("http")
     async def request_id(request, call_next):
         request.state.request_id = str(uuid4())
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            # Keep sanitized failures inside the CORS and request-ID boundary.
+            response = await unavailable(request, exc)
         response.headers["X-Request-ID"] = request.state.request_id
         return response
 
@@ -199,4 +198,10 @@ def create_app(services, *, verifier=deny_authentication, conversations=None, co
         if idempotency_key and request.client_request_id and idempotency_key != request.client_request_id:
             raise AppError("validation", "Header and body request IDs must match")
         return run_async(lambda: conv.invoke(user, conversation_id, request.message, idempotency_key or request.client_request_id))
+    if cors_origins:
+        # Last registered is outermost, including middleware-generated failures.
+        app.add_middleware(CORSMiddleware, allow_origins=list(cors_origins),
+                           allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+                           allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "If-Match"],
+                           expose_headers=["X-Request-ID"], max_age=600)
     return app

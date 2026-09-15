@@ -1,5 +1,64 @@
 # Backend implementation audit and staged plan
 
+## Review cycle - 2026-09-15
+
+Baseline: main at `4a000e3`, origin `git@github.com:psurge1/ImHungry.git`.
+Preserve untracked BLOG_POST.md and skills-lock.json. Read all 13 project Markdown
+files, inspected backend/frontend/tests/scripts/configuration. Baseline: 82 Python
+tests, 9 frontend tests and TypeScript/Vite build passed. No standalone lint command
+is configured. Offline CLI logged demo yogurt. Local Vite renders Cognito sign-in.
+The documented production API command fails closed without required AWS settings;
+use injected memory repositories/scripted model for this review, with no AWS changes.
+
+### Confirmed issue ledger
+
+| ID | Severity | User impact | Reproduction | Root cause | Proposed fix | Regression test |
+| --- | --- | --- | --- | --- | --- | --- |
+| R1 | medium | Invalid links produce service failures | GET food-log locator encoding a numeric UUID returns 503 | Decoded locator types are unchecked | Validate locator shape/types | Malformed JSON locators return 422 |
+| R2 | medium | Browser cannot read unexpected API errors | Inject service exception; response lacks CORS and request ID headers | Fallback handler runs outside middleware | Handle failures inside request middleware, apply outer CORS | Allowed/untrusted origins on 503 |
+| R3 | high | Future meals and historical check-ins disappear | Plans/check-ins lists omit date range; backend defaults to today | Frontend does not request history/future dates | Explicit selectable bounded ranges | Assert list paths and browser fixture visibility |
+| R4 | high | Retrying a saved food/drink/plan can duplicate it | api() generates a fresh POST key on every retry | Form retry lacks stable operation identity and timestamp | Retain exact API request after ambiguous failure | Simulated lost response, stable payload/key |
+| R5 | medium | Clearing profile fields silently keeps old values | Blank height/DOB/sex/activity then save | Blank inputs omitted from PATCH | Send explicit nulls | Clear populated optional profile fields |
+| R6 | medium | Old proposed targets remain accept-able after editing goal | Calculate, edit weight, accept without recalculating | Preview not invalidated on goal edits | Clear preview on form changes | Proposal disappears after input change |
+| R7 | medium | Replaced food retains previous source and optional nutrients | Edit sourced food with sodium/fiber; nested PATCH merges metadata | Manual editor sends incomplete replacement | Explicitly clear source metadata and unsupported nutrient fields on replacement | Inspect replacement PATCH and stored record |
+| R8 | medium | Backdated food/drink can land on a different day | Device/profile time zones differ; form constructs device-local noon | Timestamp ignores profile timezone | Convert selected date using profile timezone | Extreme offsets/DST date roundtrip |
+| R9 | medium | Failed conversation request loses retry identity when leaving Coach | Send fails, switch tabs, return | Coach unmount discards pending request | Preserve Coach while switching tabs; reuse create request too | Fail, switch tabs, retry with same key |
+
+No critical issue established. No production user data was read or changed.
+
+### Stages
+
+1. **API boundaries:** services.py, api.py, API/CORS tests. Accept malformed
+   locators as 422; sanitized unexpected errors retain CORS/request ID. Run focused
+   API/CORS tests, full Python/frontend suites, build. Commit: `stage 1: harden API error boundaries`.
+2. **Core frontend reliability:** App.tsx, api.ts, units/date helpers, component/API
+   tests. Fix R3-R9; dates, history, replacement and retries behave consistently.
+   Run focused regressions, both full suites, build and local browser flows using
+   disposable fixtures. Commit: `stage 2: fix tracking history and retry reliability`.
+3. **Verification and docs:** correct local-run/verification notes and record final
+   feature coverage, remaining limitations and browser results here. Re-run full
+   checks for the final tree; commit `stage 3: document review verification and limits`.
+
+Each stage includes diff review, `git diff --check`, commit and push to main.
+No provisioning, IAM, infrastructure deployment or credential changes in this cycle.
+
+### Improvement ideas / deferred work
+
+- Low: smaller frontend bundle; current build warns about its size. No runtime
+  defect established, so dependency restructuring is deferred.
+- General food database, broader restaurant retrieval and low-obsession presentation
+  remain documented gaps. They require product/provider choices beyond this bug cycle.
+- Production authentication/model quality and conversation failure recovery remain
+  external verification/operational work; do not weaken authentication or auto-unlock.
+
+### Review checkpoints
+
+- Stage 1: R1/R2 reproduced with failing regressions, then fixed. Focused API/CORS
+  group 12 passed; full Python 89 passed; frontend 9 passed; TypeScript/build pass.
+  Normal local frontend sign-in rendered in browser; API failure paths exercised
+  through TestClient with both memory and Moto repositories. No live AWS checks.
+
+
 ## Audit (2026-09-14)
 
 Read in authority order: FEATURES.md, ARCHITECTURE.md, SCHEMA.md,
