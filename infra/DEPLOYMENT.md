@@ -122,3 +122,17 @@ earlier source succeeds. The direct frontend Estimate form calls estimation
 without restaurant lookup. Conversation responses project text only, so the UI
 does not show tool-call activity. No provider functionality was changed by this
 deployment; successful published restaurant nutrition retrieval is not verified.
+
+## Tool activity UI deployment - 2026-09-15
+
+Application revision `b4a14b1` adds safe tool names/outcomes to restored messages
+and a collapsible Coach display. It supersedes the earlier text-only UI limitation.
+Activity appears after completion; no live event stream or raw payload is exposed.
+Restaurant retrieval/estimation behavior is otherwise unchanged.
+
+Backend change set `app-1789485293` completed without replacements; Lambda checksum
+matches ZIP SHA256 `eeead18c34b6c867c1a093ec7bbbb95d6d2a9f7b85eb758fbffccc45cd019490`.
+Amplify job `5` succeeded; live `/assets/index-B5vEmZXA.js` matches the build and
+API health returns 200. Verification: 96 backend tests, 23 frontend tests,
+TypeScript/build, and a local browser conversation showing an actual scripted
+tool call and its persisted outcome. No authenticated production-user writes.
