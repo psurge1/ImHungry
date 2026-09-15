@@ -57,6 +57,21 @@ No provisioning, IAM, infrastructure deployment or credential changes in this cy
   group 12 passed; full Python 89 passed; frontend 9 passed; TypeScript/build pass.
   Normal local frontend sign-in rendered in browser; API failure paths exercised
   through TestClient with both memory and Moto repositories. No live AWS checks.
+  Commit `8af3e82` pushed to origin/main.
+- Stage 2: R3-R9 fixed in App.tsx and the date helper, with frontend regressions
+  and backend persisted-null/replacement tests. Full Python 93 passed, frontend
+  20 passed, TypeScript/build passed; only existing AnyIO and bundle-size warnings.
+  A disposable local browser harness used the real App/FastAPI/services/Strands
+  loop with memory data, a scripted model and an injected test verifier, outside
+  the repo. Verified future-plan/history visibility, check-in creation, target
+  preview invalidation/acceptance, food replacement/totals, hydration and coach
+  tool logging. Today/Plans fit a 390px viewport; switching tabs preserves forms.
+  API logs showed successful preflight and product requests. No new application
+  console errors after correcting the temporary harness's module imports.
+  Lost-response retries, profile clearing, source cleanup and extreme timezone/DST
+  cases are regression-tested. Production auth and real model quality were not
+  exercised. Pending requests remain in memory only; reloading/signing out or
+  replacing a form discards them. Reconcile existing entries before resubmitting.
 
 
 ## Audit (2026-09-14)

@@ -101,6 +101,39 @@ def test_reject_untrusted_patch_and_bad_reference(service):
         service.get("alice", "food-log", "../../someone")
 
 
+def test_cleared_profile_inputs_remain_unknown(service):
+    service.update("alice", "profile", "profile", PROFILE, 0)
+    cleared = {field: None for field in ("height_cm", "date_of_birth", "sex_for_bmr_equation", "activity_context")}
+    service.update("alice", "profile", "profile", cleared, 1)
+    stored = service.get("alice", "profile", "profile")
+    assert all(stored.get(field) is None for field in cleared)
+    assert stored["allergies"] == ["peanuts"]
+    assert service.calculate_strategy("alice", GOAL)["complete"] is False
+
+
+def test_manual_food_replacement_clears_old_nutrients_and_provenance(service):
+    first = service.create("alice", "food-log", {
+        **FOOD, "nutrition": {**FOOD["nutrition"], "fiber_g": 5, "sodium_mg": 900},
+        "source": {"type": "external_database", "provider": "fixture", "external_id": "old", "source_url": "https://example.com/old"},
+        "estimate": {"confidence": "low", "ranges": {"energy_kcal": {"minimum": 100, "maximum": 200}}, "assumptions": ["Fixture portion"]},
+    }, "original")
+    service.update("alice", "food-log", first["entry_ref"], {
+        "food": {"display_name": "Replacement"},
+        "nutrition": {"energy_kcal": 200, "protein_g": 10, "carbs_g": 25, "fat_g": 7, "fiber_g": None, "sodium_mg": None},
+        "source": {"type": "user_provided", "provider": None, "external_id": None, "source_url": None, "recipe_id": None, "saved_food_id": None},
+        "estimate": None,
+    }, 1)
+    stored = service.get("alice", "food-log", first["entry_ref"])
+    assert stored["source"]["type"] == "user_provided"
+    assert all(stored["source"].get(field) is None for field in ("provider", "external_id", "source_url"))
+    assert stored.get("estimate") is None
+    assert stored["nutrition"].get("fiber_g") is None
+    assert stored["nutrition"].get("sodium_mg") is None
+    totals = service.summary("alice", "2026-09-14")["totals"]
+    assert totals["energy_kcal"] == 200
+    assert "sodium_mg" not in totals
+
+
 def test_future_revision_does_not_change_todays_target(service):
     service.update("alice", "profile", "profile", PROFILE, 0)
     calculation = service.calculate_strategy("alice", GOAL)
