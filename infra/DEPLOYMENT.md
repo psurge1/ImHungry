@@ -81,3 +81,44 @@ The subsequent review used local fixtures only and did not redeploy or reverify
 AWS resources. Its code changes were committed separately; Git pushes do not
 automatically publish the frontend or backend. The verification results above
 describe the earlier deployment, not the latest repository revision.
+
+## Explicit application deployment - 2026-09-15
+
+Deployed application revision `4d88100` after the user's explicit instruction:
+
+- Backend change set `app-1789483627`: `UPDATE_COMPLETE`. Only Lambda code and
+  dependent API integration references changed; no replacements or IAM changes.
+- Backend ZIP SHA256: `6b50c2ab901a0725c3c51866221c78a36e28cff07c142c19662378f560dd85a5`.
+  Lambda's reported code checksum matches the local artifact.
+- Amplify app `d2sqqpgd3gb3c4`, branch `main`, job `4`: `SUCCEED`.
+  Published `/assets/index-B6YajPyQ.js` matches the local frontend build byte-for-byte.
+- Health, missing/invalid-token rejection, signing keys, storage protection and
+  runtime IAM simulation passed `scripts/verify_deployment.py`.
+- Live preflight accepts the Amplify origin (200) and rejects an untrusted origin
+  (400, no allow-origin header). The deployed sign-in page rendered in the browser.
+- No real-user authenticated HTTP conversation was exercised.
+
+### Restaurant provider verification
+
+The actual `lookup_restaurant_menu` tool was exercised locally against public
+sources with disposable data. For Chuy's and Torchy's Tacos, the guessed base
+MenuMacros URLs returned 404, category URLs returned 200 but yielded no parsed
+items, and Macros.Menu returned 429. Both lookups returned the explicit estimation
+fallback. A 200 page response therefore does not establish a successful lookup.
+
+A real Bedrock/Strands coach probe invoked `lookup_restaurant_menu` followed by
+`estimate_food_nutrition`, including a probe at the deployed 3000-token limit.
+The estimation calls returned generic validation errors despite valid-looking
+request arguments. Separate direct structured-estimation requests and an isolated
+Strands tool-adapter call did validate; this does not establish reliable behavior
+inside a full coach turn. The conversational fallback needs a separate fix.
+These probes used the local AWS identity and memory repositories, not production
+user records or the deployed Cognito HTTP flow.
+
+There is no general Google/web search tool or arbitrary official-site scraper.
+The adapter tries guessed MenuMacros/Macros.Menu paths, or sends a supplied HTTPS
+menu URL through Macros.Menu. It does not guarantee both sites are called when an
+earlier source succeeds. The direct frontend Estimate form calls estimation
+without restaurant lookup. Conversation responses project text only, so the UI
+does not show tool-call activity. No provider functionality was changed by this
+deployment; successful published restaurant nutrition retrieval is not verified.

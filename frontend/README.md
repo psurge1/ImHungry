@@ -61,7 +61,9 @@ and date fixtures; they never create real users or write real nutrition data.
 The 2026-09-15 review exercised the actual frontend and API with disposable local
 data and a scripted Strands coach. Earlier live checks covered sign-in screens,
 hosting, preflight and unauthorized responses; a complete real-user conversation
-is still a manual check. Review changes have not been deployed.
+is still a manual check. Review application revision `4d88100` was subsequently
+deployed on 2026-09-15 through Amplify job 4; the published bundle was verified
+against the local build. See the deployment report for backend and provider checks.
 
 After a network/server failure, use **Retry same request/message** to keep the
 original payload and request identity. Switching tabs preserves pending attempts.
