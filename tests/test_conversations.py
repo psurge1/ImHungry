@@ -43,6 +43,8 @@ def test_real_strands_loop_logs_restores_and_selects_context(conversations):
         messages = await restored.messages("alice", cid)
         assert [m["role"] for m in messages["messages"]] == ["user", "assistant"] * 3
         assert "toolUse" not in json.dumps(messages)
+        assert messages["messages"][3]["tool_activity"] == [{"name": "log_food", "status": "completed"}]
+        assert messages["messages"][5]["tool_activity"] == [{"name": "get_meal_decision_context", "status": "completed"}]
         keys = await conversations.storage.list("")
         assert keys == [f"session/{cid}/scopes/agent/dietitian/snapshots/snapshot_latest.json"]
         snapshot = json.loads(await conversations.storage.read(keys[0]))

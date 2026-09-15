@@ -133,3 +133,18 @@ it('reuses conversation creation identity after a lost response', async () => {
   const calls=vi.mocked(api).mock.calls.filter(([p,o])=>p==='/v1/conversations'&&o?.method==='POST');
   expect(calls[0][1]?.key).toBeTruthy(); expect(calls[1][1]).toEqual(calls[0][1]);
 });
+
+
+it('shows persisted tool activity beside the coach reply', async () => {
+  vi.mocked(api).mockImplementation(async (path, options) => {
+    if (path === '/v1/conversations') return {conversation_id:'one'};
+    if (path.endsWith('/messages') && !options?.method) return {messages:[{role:'assistant',text:'Menu data was unavailable.',tool_activity:[{name:'lookup_restaurant_menu',status:'unavailable'}]}]};
+    return {version:0,configured:false};
+  });
+  open(); fireEvent.click(screen.getByRole('button', {name:'Coach'}));
+  fireEvent.change(screen.getByLabelText('Your message'), {target:{value:'Check this restaurant'}});
+  fireEvent.click(screen.getByRole('button', {name:'Send message'}));
+  expect(await screen.findByText('Look up restaurant menu')).toBeTruthy();
+  expect(await screen.findByText('No data available')).toBeTruthy();
+  expect(await screen.findByText('Menu data was unavailable.')).toBeTruthy();
+});

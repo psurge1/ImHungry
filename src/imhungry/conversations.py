@@ -1,6 +1,7 @@
 """Own conversations and coordinate native snapshots with durable product data."""
 
 from copy import deepcopy
+import json
 from uuid import uuid4
 
 from strands.session import SnapshotSessionManager
@@ -8,6 +9,53 @@ from strands.session import SnapshotSessionManager
 from .errors import AppError, Conflict, NotFound
 from .repository import Write, partition
 from .services import digest
+
+
+def project_messages(history):
+    """Expose text and allowlisted tool outcomes, never arguments or raw results."""
+    from .tools import TOOLS
+    names = {tool.tool_name for tool in TOOLS}
+    messages, pending, calls = [], [], {}
+    for message in history:
+        for block in message.get("content", []):
+            use = block.get("toolUse")
+            if message.get("role") == "assistant" and isinstance(use, dict) and use.get("name") in names:
+                activity = {"name": use["name"], "status": "unconfirmed"}
+                pending.append(activity)
+                if isinstance(use.get("toolUseId"), str):
+                    calls[use["toolUseId"]] = activity
+            result = block.get("toolResult")
+            if isinstance(result, dict) and isinstance(result.get("toolUseId"), str):
+                activity = calls.get(result["toolUseId"])
+                if activity is not None:
+                    status = "completed" if result.get("status") == "success" else "failed"
+                    for content in result.get("content", []):
+                        data = content.get("json")
+                        if isinstance(content.get("text"), str):
+                            try:
+                                data = json.loads(content["text"])
+                            except (ValueError, TypeError):
+                                pass
+                        if isinstance(data, dict):
+                            if "error" in data:
+                                status = "failed"
+                            elif data.get("status") == "unavailable" and status != "failed":
+                                status = "unavailable"
+                    activity["status"] = status
+        if message.get("role") not in {"user", "assistant"}:
+            continue
+        text = "\n".join(block["text"] for block in message.get("content", []) if isinstance(block.get("text"), str))
+        if text:
+            if message["role"] == "user" and pending:
+                messages.append({"role": "assistant", "text": "", "tool_activity": pending})
+                pending = []
+            public = {"role": message["role"], "text": text}
+            if message["role"] == "assistant" and pending:
+                public["tool_activity"], pending = pending, []
+            messages.append(public)
+    if pending:
+        messages.append({"role": "assistant", "text": "", "tool_activity": pending})
+    return messages
 
 
 class ConversationService:
@@ -81,13 +129,7 @@ class ConversationService:
     async def messages(self, user, conversation_id):
         _, item = self._owned(user, conversation_id)
         _, agent = await self._open(item)
-        messages = []
-        for message in agent.messages:
-            if message["role"] not in {"user", "assistant"}:
-                continue
-            text = "\n".join(block["text"] for block in message["content"] if isinstance(block.get("text"), str))
-            if text:
-                messages.append({"role": message["role"], "text": text})
+        messages = project_messages(agent.messages)
         return {"messages": messages, "note": "Restorable conversation view; older messages may be summarized by Strands."}
 
     async def invoke(self, user, conversation_id, message, request_id):

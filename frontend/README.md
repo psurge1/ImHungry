@@ -10,6 +10,12 @@ Plans initially shows today through 30 days ahead, and Progress shows the last
 30 days including today. Use From/Through to inspect another range. Historical
 food and drink entries use the profile timezone; meal scheduling labels device time.
 
+Coach replies show a collapsible **Tool activity** list with tool names and outcomes.
+It appears when the reply completes, not as live streaming progress. Existing
+conversations show activity still present in their native snapshot. No arguments
+or raw tool results are exposed; unavailable sources and failed operations are
+shown separately from completed calls.
+
 React + TypeScript + Vite, Amplify Authenticator, and TanStack Query. The app uses
 the existing Cognito pool and FastAPI backend. Nutrition logic stays in Python.
 Amplify handles sign-up, confirmation, sign-in, password recovery and token refresh;

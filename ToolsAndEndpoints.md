@@ -427,6 +427,16 @@ Candidate patterns may be discussed in conversation, but `save_behavior_pattern`
 
 The message endpoint is the only general AI endpoint. Meal recommendations, substitutions, social-event planning, scale explanations, and coaching all enter through natural-language messages rather than separate copies of the agent loop.
 
+`GET /v1/conversations/{conversation_id}/messages` returns `messages` with `role`
+and `text`. Assistant messages may also include `tool_activity`, an ordered array
+of `{name, status}`. Names are restricted to registered tools; status is
+`completed`, `failed`, `unavailable`, or `unconfirmed`. Application errors count
+as failures even when the SDK transport reports success. No tool arguments,
+raw results, invocation IDs or storage paths are returned. Activity is derived
+from the owned native snapshot after a turn finishes, not streamed live; older
+activity may disappear when Strands summarizes history. A `completed` status
+indicates a successful tool result, not independent verification of nutrition.
+
 ### User Profile and Diet Setup
 
 | Method | Path | Purpose |

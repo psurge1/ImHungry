@@ -2,6 +2,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, list, localDate } from './api';
 import CoachMarkdown from './CoachMarkdown';
+import ToolActivity from './ToolActivity';
 import { dateAtNoon, shiftDate } from './dates';
 import { cmToInches, fluidOuncesToMl, inchesToCm, kgToPounds, mlToFluidOunces, poundsToKg } from './units';
 
@@ -138,7 +139,7 @@ function Coach({refresh}: any) {
   return <><h1>A little help with food</h1><p>Ask for meal ideas, recipes, restaurant options, or coaching based on your logs.</p><section>
     <div className="toolbar"><label>Conversation<select disabled={busy || !!pending} value={selected} onChange={e => {setSelected(e.target.value); setError(''); setSent('');}}><option value="">New conversation</option>{conversations.data?.filter(c => c.status === 'active').map(c => <option key={c.conversation_id} value={c.conversation_id}>{c.title}</option>)}</select></label><button className="quiet" disabled={busy} onClick={() => {setSelected(''); setPending(null); setSent(''); setError(''); setDraft('');}}>New conversation</button></div>
     <Status query={conversations}/>{selected && <Status query={messages}/>}
-<div className="messages" aria-live="polite">{!selected && <p className="empty">Try “Help me plan dinner” or “How can I handle late-night hunger?”<br/>Ask me to save a recipe, log a meal, or plan for a restaurant visit.</p>}{messages.data?.messages?.map((m: any, i: number) => <div className={`message ${m.role}`} key={i}><small>{m.role === 'user' ? 'You' : 'ImHungry'}</small>{m.role === 'assistant' ? <CoachMarkdown text={m.text}/> : <p>{m.text}</p>}</div>)}{sent && <div className="message user"><small>You · {busy ? 'sending' : 'not yet confirmed'}</small><p>{sent}</p></div>}{busy && <p role="status">Thinking and checking your context. This may take a minute…</p>}</div>
+<div className="messages" aria-live="polite">{!selected && <p className="empty">Try “Help me plan dinner” or “How can I handle late-night hunger?”<br/>Ask me to save a recipe, log a meal, or plan for a restaurant visit.</p>}{messages.data?.messages?.map((m: any, i: number) => <div className={`message ${m.role}`} key={i}><small>{m.role === 'user' ? 'You' : 'ImHungry'}</small>{m.role === 'assistant' ? <><ToolActivity items={m.tool_activity}/>{m.text && <CoachMarkdown text={m.text}/>}</> : <p>{m.text}</p>}</div>)}{sent && <div className="message user"><small>You · {busy ? 'sending' : 'not yet confirmed'}</small><p>{sent}</p></div>}{busy && <p role="status">Thinking and checking your context. Tool activity appears when the reply finishes…</p>}</div>
     <form onSubmit={e => {e.preventDefault(); void send();}}><label>Your message<textarea maxLength={12000} rows={3} value={draft} disabled={busy || !!pending} onChange={e => setDraft(e.target.value)} placeholder="What would you like help with?"/></label><button disabled={busy || (!pending && !draft.trim())}>{busy ? 'Working…' : pending ? 'Retry same message' : 'Send message'}</button></form>
     {error && <p role="alert" className="error">{error} {pending && 'Retry keeps the same request ID to avoid duplicate writes. If the conversation is blocked, start a new one; the failed conversation needs operator recovery.'}</p>}
   </section></>;

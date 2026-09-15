@@ -135,8 +135,10 @@ imhungry/<environment>/session/<conversation-id>/scopes/agent/dietitian/snapshot
 
 The manager saves explicitly after a successful invocation using its native API;
 no custom transcript schema or immutable per-turn objects are introduced. Message
-reads project only user and assistant text, never raw snapshots, tool payloads or
-agent state. The current trusted prompt/date is refreshed after restoration.
+reads project user and assistant text plus allowlisted tool names and outcomes,
+never raw snapshots, tool arguments/results or agent state. Coach shows this
+activity after a reply completes; it is not a live event stream. The current
+trusted prompt/date is refreshed after restoration.
 
 ## Testing
 
